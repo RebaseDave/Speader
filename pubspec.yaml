@@ -100,11 +100,6 @@ flutter:
         - asset: assets/fonts/Literata-Regular.ttf
         - asset: assets/fonts/Literata-Bold.ttf
           weight: 700
-    - family: Cause
-      fonts:
-        - asset: assets/fonts/Cause-Regular.ttf
-        - asset: assets/fonts/Cause-Bold.ttf
-          weight: 700
     - family: Lexie
       fonts:
         - asset: assets/fonts/LexieReadable-Regular.ttf
@@ -115,37 +110,44 @@ flutter:
         - asset: assets/fonts/Lora-Regular.ttf
         - asset: assets/fonts/Lora-Bold.ttf
           weight: 700
-    - family: Zilla
-      fonts:
-        - asset: assets/fonts/ZillaSlab-Regular.ttf
-        - asset: assets/fonts/ZillaSlab-Bold.ttf
-          weight: 700
-    - family: Readex
-      fonts:
-        - asset: assets/fonts/ReadexPro-Regular.ttf
-        - asset: assets/fonts/ReadexPro-Bold.ttf
-          weight: 700
     - family: Nunito
       fonts:
         - asset: assets/fonts/Nunito-Regular.ttf
         - asset: assets/fonts/Nunito-Bold.ttf
-          weight: 700
-    - family: Inter
-      fonts:
-        - asset: assets/fonts/Inter_24pt-Regular.ttf
-        - asset: assets/fonts/Inter_24pt-Bold.ttf
           weight: 700
     - family: Atkinson
       fonts:
         - asset: assets/fonts/AtkinsonHyperlegible-Regular.ttf
         - asset: assets/fonts/AtkinsonHyperlegible-Bold.ttf
           weight: 700
-    - family: Baskerville
+    - family: Cormorant
       fonts:
-        - asset: assets/fonts/LibreBaskerville-Regular.ttf
-        - asset: assets/fonts/LibreBaskerville-Bold.ttf
+        - asset: assets/fonts/Cormorant-Regular.ttf
+        - asset: assets/fonts/Cormorant-Bold.ttf
           weight: 700
-
+    - family: Dekko
+      fonts:
+        - asset: assets/fonts/Dekko-Regular.ttf
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces_72pt-Regular.ttf
+        - asset: assets/fonts/Fraunces_72pt-Bold.ttf
+          weight: 700
+    - family: Merriweather
+      fonts:
+        - asset: assets/fonts/Merriweather_24pt-Regular.ttf
+        - asset: assets/fonts/Merriweather_24pt-Bold.ttf
+          weight: 700
+    - family: MerriweatherSans
+      fonts:
+        - asset: assets/fonts/MerriweatherSans-Regular.ttf
+        - asset: assets/fonts/MerriweatherSans-Bold.ttf
+          weight: 700
+    - family: Spectral
+      fonts:
+        - asset: assets/fonts/Spectral-Regular.ttf
+        - asset: assets/fonts/Spectral-Bold.ttf
+          weight: 700
 
 
 

@@ -404,14 +404,18 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
 
             // Companion Level-Up
             if (_showLevelUp)
-              IgnorePointer(
-                child: CompanionLevelUpOverlay(
-                  slot: _levelUpSlot,
-                  newLevel: _levelUpLevel,
-                  onDone: () {
-                    if (mounted) setState(() => _showLevelUp = false);
-                    ref.read(companionProvider.notifier).clearPendingLevelUp();
-                  },
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: CompanionLevelUpOverlay(
+                    slot: _levelUpSlot,
+                    newLevel: _levelUpLevel,
+                    onDone: () {
+                      if (mounted) setState(() => _showLevelUp = false);
+                      ref
+                          .read(companionProvider.notifier)
+                          .clearPendingLevelUp();
+                    },
+                  ),
                 ),
               ),
 

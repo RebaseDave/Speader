@@ -14,7 +14,6 @@ class StatsSheet extends ConsumerStatefulWidget {
 
 class _StatsSheetState extends ConsumerState<StatsSheet> {
   Map<String, int>? _aggregated;
-  List<Map<String, dynamic>>? _wpmHistory;
   List<Map<String, dynamic>>? _dailyCounts;
   List<Map<String, dynamic>>? _hourlyData;
   StreakData? _streak;
@@ -22,6 +21,7 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
   int _bestStreak = 0;
   Map<String, int> _currentWeekByDay = {};
   late DateTime _calendarMonth;
+  Map<String, List<Map<String, dynamic>>>? _wpmHistoryByMode;
 
   @override
   void initState() {
@@ -36,24 +36,24 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
     final results = await Future.wait([
       dao.getAggregatedStats(),
       dao.getCurrentWeekSessions(),
-      dao.getWeeklyWpmHistory(),
       dao.getDailyWordCounts(),
       StreakService(dao).load(),
       dao.getHourlyWordCounts(),
       dao.getLongestSession(),
       dao.getBestStreak(),
+      dao.getWeeklyWpmHistoryByMode(),
     ]);
 
     if (!mounted) return;
     setState(() {
       _aggregated = results[0] as Map<String, int>;
       final weekSessions = results[1] as List<ReadSession>;
-      _wpmHistory = results[2] as List<Map<String, dynamic>>;
-      _dailyCounts = results[3] as List<Map<String, dynamic>>;
-      _streak = results[4] as StreakData;
-      _hourlyData = results[5] as List<Map<String, dynamic>>;
-      _longestSession = results[6] as ReadSession?;
-      _bestStreak = results[7] as int;
+      _dailyCounts = results[2] as List<Map<String, dynamic>>;
+      _streak = results[3] as StreakData;
+      _hourlyData = results[4] as List<Map<String, dynamic>>;
+      _longestSession = results[5] as ReadSession?;
+      _bestStreak = results[6] as int;
+      _wpmHistoryByMode = results[7] as Map<String, List<Map<String, dynamic>>>;
 
       // Wörter pro Tag dieser Woche aggregieren
       final weekMap = <String, int>{};
@@ -440,7 +440,10 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
   // ── WPM VERLAUF ───────────────────────────────────────────────────────────
 
   Widget _buildWpmChart(Color primary) {
-    if (_wpmHistory == null || _wpmHistory!.isEmpty) {
+    final rsvpData = _wpmHistoryByMode?['rsvp'] ?? [];
+    final paraData = _wpmHistoryByMode?['paragraph'] ?? [];
+
+    if (rsvpData.isEmpty && paraData.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -455,89 +458,69 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
       );
     }
 
-    final points = _wpmHistory!.map((row) {
-      final words = row['total_words'] as int? ?? 0;
-      final secs = row['total_seconds'] as int? ?? 0;
-      final wpm = secs > 0 ? (words / secs * 60).round() : 0;
-      return wpm;
-    }).toList();
+    List<int> toPoints(List<Map<String, dynamic>> data) => data.map((row) {
+          final words = row['total_words'] as int? ?? 0;
+          final secs = row['total_seconds'] as int? ?? 0;
+          return secs > 0 ? (words / secs * 60).round() : 0;
+        }).toList();
 
-    final maxWpm = points.fold<int>(0, (a, b) => a > b ? a : b);
-    final minWpm = points.fold<int>(maxWpm, (a, b) => a < b ? a : b);
+    final rsvpPoints = toPoints(rsvpData);
+    final paraPoints = toPoints(paraData);
+
+    final allPoints = [...rsvpPoints, ...paraPoints];
+    final maxWpm = allPoints.fold<int>(0, (a, b) => a > b ? a : b);
+    final minWpm = allPoints.fold<int>(maxWpm, (a, b) => a < b ? a : b);
     final range = (maxWpm - minWpm).toDouble();
-
-    // Y-Achse: 3 Labels (min, mitte, max)
     final midWpm = ((maxWpm + minWpm) / 2).round();
+
+    const paraColor = Color(0xFF4CAF50);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _sectionTitle('WPM-Verlauf'),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Container(width: 12, height: 2, color: primary),
+            const SizedBox(width: 6),
+            const Text('RSVP', style: TextStyle(color: Colors.white38, fontSize: 11)),
+            const SizedBox(width: 16),
+            Container(width: 12, height: 2, color: paraColor),
+            const SizedBox(width: 6),
+            const Text('Absatz', style: TextStyle(color: Colors.white38, fontSize: 11)),
+          ],
+        ),
+        const SizedBox(height: 8),
         SizedBox(
           height: 120,
           child: Row(
             children: [
-              // Y-Achse
               SizedBox(
                 width: 36,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      '$maxWpm',
-                      style: const TextStyle(
-                        color: Colors.white24,
-                        fontSize: 9,
-                      ),
-                    ),
-                    Text(
-                      '$midWpm',
-                      style: const TextStyle(
-                        color: Colors.white24,
-                        fontSize: 9,
-                      ),
-                    ),
-                    Text(
-                      '$minWpm',
-                      style: const TextStyle(
-                        color: Colors.white24,
-                        fontSize: 9,
-                      ),
-                    ),
+                    Text('$maxWpm', style: const TextStyle(color: Colors.white24, fontSize: 9)),
+                    Text('$midWpm', style: const TextStyle(color: Colors.white24, fontSize: 9)),
+                    Text('$minWpm', style: const TextStyle(color: Colors.white24, fontSize: 9)),
                   ],
                 ),
               ),
               const SizedBox(width: 8),
-              // Chart
               Expanded(
                 child: CustomPaint(
-                  painter: _WpmLinePainter(
-                    points: points,
-                    color: primary,
+                  painter: _DualWpmLinePainter(
+                    rsvpPoints: rsvpPoints,
+                    paraPoints: paraPoints,
+                    rsvpColor: primary,
+                    paraColor: paraColor,
                     minWpm: minWpm.toDouble(),
                     range: range,
                   ),
                   size: Size.infinite,
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.only(left: 44),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _wpmHistory!.first['week_monday'] as String? ?? '',
-                style: const TextStyle(color: Colors.white24, fontSize: 10),
-              ),
-              const Text(
-                'Heute',
-                style: TextStyle(color: Colors.white24, fontSize: 10),
               ),
             ],
           ),
@@ -801,23 +784,25 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
 }
 
 // ── WPM LINE PAINTER ──────────────────────────────────────────────────────────
-
-class _WpmLinePainter extends CustomPainter {
-  final List<int> points;
-  final Color color;
+class _DualWpmLinePainter extends CustomPainter {
+  final List<int> rsvpPoints;
+  final List<int> paraPoints;
+  final Color rsvpColor;
+  final Color paraColor;
   final double minWpm;
   final double range;
 
-  _WpmLinePainter({
-    required this.points,
-    required this.color,
+  _DualWpmLinePainter({
+    required this.rsvpPoints,
+    required this.paraPoints,
+    required this.rsvpColor,
+    required this.paraColor,
     required this.minWpm,
     required this.range,
   });
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (points.length < 2) return;
+  void _drawLine(Canvas canvas, Size size, List<int> points, Color color) {
+    if (points.isEmpty) return;
 
     final paint = Paint()
       ..color = color
@@ -825,37 +810,29 @@ class _WpmLinePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
 
-    final fillPaint = Paint()
-      ..color = color.withValues(alpha: 0.15)
-      ..style = PaintingStyle.fill;
-
     final path = Path();
-    final fillPath = Path();
-
     for (int i = 0; i < points.length; i++) {
-      final x = size.width * i / (points.length - 1);
+      final x = points.length == 1
+          ? size.width / 2
+          : size.width * i / (points.length - 1);
       final normalized = range == 0 ? 0.5 : (points[i] - minWpm) / range;
       final y = size.height * (1 - normalized * 0.8 - 0.1);
 
       if (i == 0) {
         path.moveTo(x, y);
-        fillPath.moveTo(x, size.height);
-        fillPath.lineTo(x, y);
       } else {
         path.lineTo(x, y);
-        fillPath.lineTo(x, y);
       }
 
-      // Datenpunkt
-      final dotPaint = Paint()..color = color;
-      canvas.drawCircle(Offset(x, y), 3, dotPaint);
+      canvas.drawCircle(Offset(x, y), 3, Paint()..color = color);
     }
-
-    fillPath.lineTo(size.width, size.height);
-    fillPath.close();
-
-    canvas.drawPath(fillPath, fillPaint);
     canvas.drawPath(path, paint);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    _drawLine(canvas, size, rsvpPoints, rsvpColor);
+    _drawLine(canvas, size, paraPoints, paraColor);
   }
 
   @override

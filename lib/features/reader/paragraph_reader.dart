@@ -321,7 +321,8 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
           onVerticalDragEnd: (details) {
             final v = details.primaryVelocity ?? 0;
             final screenHeight = MediaQuery.of(context).size.height;
-            final startedInBottomZone = (_dragStartY ?? 0) >= screenHeight - 160;
+            final startedInBottomZone =
+                (_dragStartY ?? 0) >= screenHeight - 160;
 
             if (v < -300 && startedInBottomZone) {
               _showOverlay();
@@ -605,16 +606,18 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
 
               // Companion Level-Up
               if (_showLevelUp)
-                IgnorePointer(
-                  child: CompanionLevelUpOverlay(
-                    slot: _levelUpSlot,
-                    newLevel: _levelUpLevel,
-                    onDone: () {
-                      if (mounted) setState(() => _showLevelUp = false);
-                      ref
-                          .read(companionProvider.notifier)
-                          .clearPendingLevelUp();
-                    },
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: CompanionLevelUpOverlay(
+                      slot: _levelUpSlot,
+                      newLevel: _levelUpLevel,
+                      onDone: () {
+                        if (mounted) setState(() => _showLevelUp = false);
+                        ref
+                            .read(companionProvider.notifier)
+                            .clearPendingLevelUp();
+                      },
+                    ),
                   ),
                 ),
 

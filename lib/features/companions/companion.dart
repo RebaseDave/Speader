@@ -13,7 +13,7 @@ class Companion {
     required this.isActive,
   });
 
-  static const int xpPerLevel = 5000;
+  static const int xpPerLevel = 4000;
   static const int maxLevel = 100;
 
   bool get isPrestige => slot == 11;

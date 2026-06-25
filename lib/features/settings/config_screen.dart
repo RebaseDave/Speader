@@ -375,6 +375,15 @@ class _PausenPanel extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
       children: [
+        _SwitchRow(
+          label: 'Absatz-Modus',
+          value: s.paragraphMode,
+          onChanged: (val) async {
+            await SettingsService.instance.setParagraphMode(val);
+            n.reload();
+          },
+        ),
+        const Divider(color: Colors.white12, height: 16),
         _StepRow(
           label: 'WPM',
           value: s.wpm,

@@ -30,24 +30,25 @@ class SettingsService {
   static const bool defaultOrpCentered = false;
   static const bool defaultOrpDotEnabled = true;
   static const double defaultOrpDotSpacing = 25;
-  static const String defaultFontFamily = 'Nunito';
+  static const String defaultFontFamily = 'Literata';
   static const List<String> allFonts = [
-    'Inter',
-    'Readex',
+    'Literata',
+    'Spectral',
+    'Cormorant',
+    'Fraunces',
+    'Merriweather',
+    'MerriweatherSans',
+    'Lora',
     'Nunito',
     'Atkinson',
     'Lexie',
-    'Cause',
-    'Literata',
-    'Lora',
-    'Baskerville',
-    'Zilla'
+    'Dekko',
   ];
   static const List<String> defaultSelectedFonts = [
-    'Nunito',
-    'Lexie',
-    'Readex',
     'Literata',
+    'Spectral',
+    'Nunito',
+    'Atkinson',
   ];
   static const double defaultFontSize = 30.0;
   static const int defaultChapterPauseMs = 2500;

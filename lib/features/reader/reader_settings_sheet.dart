@@ -46,51 +46,6 @@ class ReaderSettingsSheet extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Farbprofil
-                  // Lesemodus Toggle
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Lesemodus',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            'RSVP',
-                            style: TextStyle(
-                              color: !settings.paragraphMode
-                                  ? Colors.white
-                                  : Colors.white38,
-                              fontSize: 12,
-                            ),
-                          ),
-                          Switch(
-                            value: settings.paragraphMode,
-                            onChanged: (val) async {
-                              await service.setParagraphMode(val);
-                              ref.read(settingsProvider.notifier).reload();
-                              if (context.mounted) Navigator.pop(context);
-                            },
-                            activeTrackColor: Theme.of(
-                              context,
-                            ).colorScheme.primary,
-                          ),
-                          Text(
-                            'Absatz',
-                            style: TextStyle(
-                              color: settings.paragraphMode
-                                  ? Colors.white
-                                  : Colors.white38,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const Divider(color: Colors.white12),
                   const SizedBox(height: 8),
                   const Text(
                     'Farbprofil',

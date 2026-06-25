@@ -30,13 +30,14 @@ class SessionDao {
       final last = ReadSession.fromMap(recent.first);
       final lastEnd = last.startedAt.add(Duration(seconds: last.durationSec));
       final gap = session.startedAt.difference(lastEnd).inSeconds.abs();
-      if (gap <= _mergeThresholdSeconds) {
+      if (gap <= _mergeThresholdSeconds && last.mode == session.mode) {
         final merged = ReadSession(
           id: last.id,
           bookId: last.bookId,
           startedAt: last.startedAt,
           durationSec: last.durationSec + session.durationSec,
           wordsRead: last.wordsRead + session.wordsRead,
+          mode: session.mode,
         );
         await db.update(
           'read_sessions',
@@ -303,5 +304,31 @@ class SessionDao {
       GROUP BY day
       ORDER BY day DESC
     ''', [mondayStart.toIso8601String(), todayStart.toIso8601String()]);
+  }
+  Future<Map<String, List<Map<String, dynamic>>>> getWeeklyWpmHistoryByMode({
+    int weeks = 8,
+  }) async {
+    final db = await _db;
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final cutoff = DateTime(monday.year, monday.month, monday.day)
+        .subtract(Duration(days: (weeks - 1) * 7));
+
+    final result = <String, List<Map<String, dynamic>>>{};
+    for (final mode in ['rsvp', 'paragraph']) {
+      result[mode] = await db.rawQuery('''
+        SELECT
+          date(read_sessions.started_at, 'weekday 0', '-6 days') as week_monday,
+          SUM(read_sessions.words_read) as total_words,
+          SUM(read_sessions.duration_sec) as total_seconds
+        FROM read_sessions
+        $_isBookFilter
+          AND read_sessions.started_at >= ?
+          AND read_sessions.mode = ?
+        GROUP BY week_monday
+        ORDER BY week_monday ASC
+      ''', [cutoff.toIso8601String(), mode]);
+    }
+    return result;
   }
 }

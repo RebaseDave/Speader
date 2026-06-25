@@ -13,6 +13,8 @@ class SentenceDetector {
         .replaceAll('\u2019', '');
     if (stripped.endsWith('...') || stripped.endsWith('…')) return true;
     if (!RegExp(r'[.!?:;]$').hasMatch(stripped)) return false;
+    // Einzelbuchstabe mit Punkt: A. B. C. etc.
+    if (RegExp(r'^[A-Za-z]\.$').hasMatch(stripped)) return false;
     for (final abbr in _abbreviations) {
       if (stripped.toLowerCase() == abbr.toLowerCase()) return false;
       if (stripped.endsWith(abbr)) return false;

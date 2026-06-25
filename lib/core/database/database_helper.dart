@@ -95,6 +95,7 @@ class DatabaseHelper {
         started_at   TEXT NOT NULL,
         duration_sec INTEGER NOT NULL,
         words_read   INTEGER NOT NULL,
+        mode         TEXT NOT NULL DEFAULT 'rsvp',
         FOREIGN KEY (book_id) REFERENCES books(id)
       )
     ''');

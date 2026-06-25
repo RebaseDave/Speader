@@ -290,6 +290,7 @@ class RsvpEngine {
         startedAt: _sessionStart!,
         durationSec: duration,
         wordsRead: _wordsReadCounter,
+        mode: 'rsvp',
       ),
     );
 

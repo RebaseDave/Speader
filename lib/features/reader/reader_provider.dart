@@ -417,6 +417,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
     return end;
   }
 
+
   int _countParaWords(int start, int end) {
     return state.tokens
         .sublist(start, end + 1)
@@ -435,15 +436,16 @@ class ReaderNotifier extends Notifier<ReaderState> {
     final start = _paraStart(idx);
     final end = _paraEnd(idx);
 
-    if (countWords) _paragraphWordsAccumulated += _countParaWords(start, end);
-
     int nextIdx = end + 1;
     while (nextIdx < tokens.length &&
         tokens[nextIdx].isBlank &&
         !tokens[nextIdx].isChapterTitle) {
       nextIdx++;
     }
-    if (nextIdx >= tokens.length) nextIdx = tokens.length - 1;
+
+    if (nextIdx >= tokens.length) return;
+
+    if (countWords) _paragraphWordsAccumulated += _countParaWords(start, end);
 
     _engine.jumpToWord(nextIdx);
     state = state.copyWith(currentIndex: nextIdx);
@@ -465,6 +467,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
     }
 
     final prevStart = _paraStart(prevEnd);
+
     if (countWords) {
       _paragraphWordsAccumulated =
           (_paragraphWordsAccumulated - _countParaWords(prevStart, prevEnd))
@@ -490,6 +493,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
             startedAt: startedAt ?? DateTime.now(),
             durationSec: estimatedSeconds,
             wordsRead: _paragraphWordsAccumulated,
+            mode: 'paragraph',
           ),
         );
     final wordsForXp = _paragraphWordsAccumulated;
