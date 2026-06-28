@@ -31,6 +31,7 @@ class ParagraphData {
   final bool isTitlePage;
   final bool isImagePage;
   final String imageKey;
+  final List<String> sentences;
 
   const ParagraphData({
     required this.pre,
@@ -41,6 +42,7 @@ class ParagraphData {
     this.isTitlePage = false,
     this.isImagePage = false,
     this.imageKey = '',
+    this.sentences = const [],
   });
 }
 
@@ -360,12 +362,72 @@ class ReaderNotifier extends Notifier<ReaderState> {
     final pre = joinRaw(preTokens);
     final post = joinRaw(postTokens);
 
+    final sentences = _buildSentenceChunks(tokens, start, end);
+
     return ParagraphData(
       pre: pre,
       current: usable(currentToken) ? currentToken.raw : '',
       post: post,
       orpIndex: currentToken.orpIndex,
+      sentences: sentences,
     );
+  }
+
+  List<String> _buildSentenceChunks(
+      List<WordToken> tokens, int start, int end) {
+    bool usable(WordToken t) =>
+        !t.isBlank && !t.isImage && !t.isChapterTitle && t.raw.isNotEmpty;
+
+    final rawSentences = <List<WordToken>>[];
+    var current = <WordToken>[];
+    for (int i = start; i <= end; i++) {
+      final t = tokens[i];
+      if (!usable(t)) continue;
+      current.add(t);
+      if (t.isSentenceEnd || t.isParagraphEnd || i == end) {
+        if (current.isNotEmpty) {
+          rawSentences.add(List<WordToken>.from(current));
+          current = [];
+        }
+      }
+    }
+    if (current.isNotEmpty) rawSentences.add(current);
+    if (rawSentences.isEmpty) return [];
+
+    final chunks = <String>[];
+    int i = 0;
+    while (i < rawSentences.length) {
+      if (rawSentences[i].length < 3) {
+        final run = <List<WordToken>>[];
+        int j = i;
+        while (j < rawSentences.length && rawSentences[j].length < 3) {
+          run.add(rawSentences[j]);
+          j++;
+        }
+        if (run.length >= 2) {
+          chunks.add(run.map(_joinTokensRaw).join(' '));
+        } else {
+          chunks.add(_joinTokensRaw(run[0]));
+        }
+        i = j;
+      } else {
+        chunks.add(_joinTokensRaw(rawSentences[i]));
+        i++;
+      }
+    }
+    return chunks;
+  }
+
+  String _joinTokensRaw(List<WordToken> tokens) {
+    if (tokens.isEmpty) return '';
+    final buf = StringBuffer();
+    for (int i = 0; i < tokens.length; i++) {
+      buf.write(tokens[i].raw);
+      if (i < tokens.length - 1 && !tokens[i].raw.endsWith('-')) {
+        buf.write(' ');
+      }
+    }
+    return buf.toString();
   }
 
   void adjustWpm(int delta) {

@@ -32,6 +32,7 @@ class SettingsState {
   final bool paragraphMode;
   final double paragraphLineHeight;
   final double paragraphFontSize;
+  final bool sentenceFocusEnabled;
 
   const SettingsState({
     required this.wpm,
@@ -63,6 +64,7 @@ class SettingsState {
     required this.paragraphMode,
     required this.paragraphLineHeight,
     required this.paragraphFontSize,
+    required this.sentenceFocusEnabled,
   });
 
   factory SettingsState.fromService(SettingsService s) {
@@ -94,6 +96,7 @@ class SettingsState {
       paragraphMode: s.paragraphMode,
       paragraphLineHeight: s.paragraphLineHeight,
       paragraphFontSize: s.paragraphFontSize,
+      sentenceFocusEnabled: s.sentenceFocusEnabled,
       activeColorProfile: s.activeColorProfile,
       colorProfileNames: {
         'a': s.colorProfileName('a'),
@@ -135,6 +138,7 @@ class SettingsState {
     bool? paragraphMode,
     double? paragraphLineHeight,
     double? paragraphFontSize,
+    bool? sentenceFocusEnabled,
   }) {
     return SettingsState(
       wpm: wpm ?? this.wpm,
@@ -166,6 +170,7 @@ class SettingsState {
       paragraphMode: paragraphMode ?? this.paragraphMode,
       paragraphLineHeight: paragraphLineHeight ?? this.paragraphLineHeight,
       paragraphFontSize: paragraphFontSize ?? this.paragraphFontSize,
+      sentenceFocusEnabled: sentenceFocusEnabled ?? this.sentenceFocusEnabled,
     );
   }
 }
@@ -325,6 +330,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
   Future<void> setParagraphFontSize(double value) async {
     await _service.setParagraphFontSize(value);
     state = state.copyWith(paragraphFontSize: value);
+  }
+
+  Future<void> setSentenceFocusEnabled(bool value) async {
+    await _service.setSentenceFocusEnabled(value);
+    state = state.copyWith(sentenceFocusEnabled: value);
   }
 
   void reload() {

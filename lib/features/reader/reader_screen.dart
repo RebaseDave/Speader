@@ -62,7 +62,6 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     WakelockPlus.enable();
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -101,7 +100,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   @override
   void dispose() {
     WakelockPlus.disable();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarContrastEnforced: false,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
     WidgetsBinding.instance.removeObserver(this);
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
@@ -339,6 +346,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                         if (_ignoreTaps) return;
                         final r = ref.read(readerProvider);
                         if (r.rsvpState == RsvpState.playing) {
+                          SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
                           await ref.read(readerProvider.notifier).stop();
                           setState(() => _overlayVisible = true);
                         } else if (r.rsvpState == RsvpState.finished) {
@@ -346,6 +354,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
                         } else {
                           if (_overlayVisible) {
                             ref.read(readerProvider.notifier).play();
+                            SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
                             setState(() => _overlayVisible = false);
                           } else {
                             setState(() => _overlayVisible = true);

@@ -32,18 +32,22 @@ class SettingsService {
   static const double defaultOrpDotSpacing = 25;
   static const String defaultFontFamily = 'Literata';
   static const List<String> allFonts = [
-    'Literata',
-    'Spectral',
-    'Cormorant',
-    'Fraunces',
-    'Merriweather',
-    'MerriweatherSans',
-    'Lora',
-    'Nunito',
-    'Atkinson',
-    'Lexie',
-    'Dekko',
-  ];
+  'EBGaramond',
+  'Literata',
+  'CrimsonPro',
+  'Gelasio',
+  'PlayfairDisplay',
+  'Spectral',
+  'Fraunces',
+  'Bitter',
+  'RobotoSlab',
+  'ZillaSlab',
+  'JosefinSlab',
+  'Inter',
+  'Nunito',
+  'Atkinson',
+  'Lexie',
+];
   static const List<String> defaultSelectedFonts = [
     'Literata',
     'Spectral',
@@ -398,5 +402,12 @@ class SettingsService {
       _prefs.getDouble('${_p}paragraph_font_size') ?? defaultParagraphFontSize;
   Future<void> setParagraphFontSize(double value) async {
     await _prefs.setDouble('${_p}paragraph_font_size', value.clamp(12.0, 40.0));
+  }
+
+  static const bool defaultSentenceFocusEnabled = false;
+  bool get sentenceFocusEnabled =>
+      _prefs.getBool('${_p}sentence_focus_enabled') ?? defaultSentenceFocusEnabled;
+  Future<void> setSentenceFocusEnabled(bool value) async {
+    await _prefs.setBool('${_p}sentence_focus_enabled', value);
   }
 }

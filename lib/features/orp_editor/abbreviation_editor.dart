@@ -35,7 +35,7 @@ class _AbbreviationEditorState extends ConsumerState<AbbreviationEditor> {
                   controller: _controller,
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
-                    hintText: 'Neue Ausnahme (z.B. "Prof.")',
+                    hintText: 'Neue Ausnahme',
                     hintStyle: const TextStyle(color: Colors.white38),
                     filled: true,
                     fillColor: Theme.of(context).cardColor,

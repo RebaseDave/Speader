@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import '../../core/services/settings_service.dart';
@@ -54,6 +55,8 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   int _levelUpLevel = 0;
 
   double? _dragStartY;
+  int _activeSentenceIndex = 0;
+  bool _pendingLastSentence = false;
 
   @override
   void initState() {
@@ -111,9 +114,47 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
 
   void _refresh() {
     if (!mounted) return;
+    final newData = ref.read(readerProvider.notifier).currentParagraph();
     setState(() {
-      _data = ref.read(readerProvider.notifier).currentParagraph();
+      _data = newData;
+      if (_pendingLastSentence) {
+        _activeSentenceIndex = (newData.sentences.length - 1).clamp(0, 9999);
+        _pendingLastSentence = false;
+      } else {
+        _activeSentenceIndex = 0;
+      }
     });
+  }
+
+  void _nextSentence() {
+    final sentences = _data?.sentences ?? [];
+    if (sentences.isEmpty) {
+      ref.read(readerProvider.notifier).nextParagraph();
+      return;
+    }
+    if (_activeSentenceIndex < sentences.length - 1) {
+      setState(() => _activeSentenceIndex++);
+    } else {
+      ref.read(readerProvider.notifier).nextParagraph();
+    }
+  }
+
+  void _prevSentence() {
+    final sentences = _data?.sentences ?? [];
+    if (sentences.isEmpty) {
+      ref.read(readerProvider.notifier).prevParagraph();
+      return;
+    }
+    if (_activeSentenceIndex > 0) {
+      setState(() => _activeSentenceIndex--);
+    } else {
+      final prevIdx = ref.read(readerProvider).currentIndex;
+      _pendingLastSentence = true;
+      ref.read(readerProvider.notifier).prevParagraph();
+      if (ref.read(readerProvider).currentIndex == prevIdx) {
+        _pendingLastSentence = false;
+      }
+    }
   }
 
   Future<void> _showOverlay() async {
@@ -124,6 +165,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
           .inSeconds;
       _readingStart = null;
     }
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
     setState(() => _overlayVisible = true);
     await _saveSession();
     await _checkGoal();
@@ -133,6 +175,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
     if (!_overlayVisible) return;
     _readingStart = DateTime.now();
     _sessionStart ??= _readingStart;
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     setState(() => _overlayVisible = false);
   }
 
@@ -309,10 +352,18 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
               ? null
               : (details) {
                   final half = MediaQuery.of(context).size.width / 2;
-                  if (details.globalPosition.dx > half) {
-                    ref.read(readerProvider.notifier).nextParagraph();
+                  if (settings.sentenceFocusEnabled) {
+                    if (details.globalPosition.dx > half) {
+                      _nextSentence();
+                    } else {
+                      _prevSentence();
+                    }
                   } else {
-                    ref.read(readerProvider.notifier).prevParagraph();
+                    if (details.globalPosition.dx > half) {
+                      ref.read(readerProvider.notifier).nextParagraph();
+                    } else {
+                      ref.read(readerProvider.notifier).prevParagraph();
+                    }
                   }
                 },
           onVerticalDragStart: (details) {
@@ -379,28 +430,57 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
                                     size: 64,
                                   ),
                                 )
-                              : RichText(
-                                  textAlign: TextAlign.center,
-                                  text: TextSpan(
-                                    style: TextStyle(
-                                      fontFamily: s.fontFamily,
-                                      fontSize: s.paragraphFontSize,
-                                      height: s.paragraphLineHeight,
-                                      color: s.textColor,
+                              : settings.sentenceFocusEnabled &&
+                                      _data!.sentences.isNotEmpty
+                                  ? Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: _data!.sentences
+                                          .asMap()
+                                          .entries
+                                          .map((entry) {
+                                        final isActive =
+                                            entry.key == _activeSentenceIndex;
+                                        return Opacity(
+                                          opacity: isActive ? 1.0 : 0.25,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 2),
+                                            child: Text(
+                                              entry.value,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontFamily: s.fontFamily,
+                                                fontSize: s.paragraphFontSize,
+                                                height: s.paragraphLineHeight,
+                                                color: s.textColor,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    )
+                                  : RichText(
+                                      textAlign: TextAlign.center,
+                                      text: TextSpan(
+                                        style: TextStyle(
+                                          fontFamily: s.fontFamily,
+                                          fontSize: s.paragraphFontSize,
+                                          height: s.paragraphLineHeight,
+                                          color: s.textColor,
+                                        ),
+                                        text: [
+                                          if (_data!.pre.isNotEmpty)
+                                            _data!.pre.endsWith('-')
+                                                ? _data!.pre
+                                                : '${_data!.pre} ',
+                                          _data!.current,
+                                          if (_data!.post.isNotEmpty)
+                                            _data!.current.endsWith('-')
+                                                ? _data!.post
+                                                : ' ${_data!.post}',
+                                        ].join(''),
+                                      ),
                                     ),
-                                    text: [
-                                      if (_data!.pre.isNotEmpty)
-                                        _data!.pre.endsWith('-')
-                                            ? _data!.pre
-                                            : '${_data!.pre} ',
-                                      _data!.current,
-                                      if (_data!.post.isNotEmpty)
-                                        _data!.current.endsWith('-')
-                                            ? _data!.post
-                                            : ' ${_data!.post}',
-                                    ].join(''),
-                                  ),
-                                ),
                         ),
                       ),
                     ),

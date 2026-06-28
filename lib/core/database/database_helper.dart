@@ -114,12 +114,46 @@ class DatabaseHelper {
     await _insertDefaultAbbreviations(db);
   }
 
+  Future<void> seedMissingAbbreviations() async {
+    final db = await database;
+    await _insertDefaultAbbreviations(db);
+  }
+
   Future<void> _insertDefaultAbbreviations(Database db) async {
     const abbreviations = [
+      // Deutsche Titel & Anreden
       'Dr.',
       'Prof.',
       'Hr.',
       'Fr.',
+      'Ing.',
+      'Dipl.',
+      'Mag.',
+      'Dir.',
+      'Doz.',
+      // Englische Titel & Anreden
+      'Mr.',
+      'Mrs.',
+      'Ms.',
+      'Jr.',
+      'Sr.',
+      'Rev.',
+      'Gov.',
+      'Sen.',
+      'Rep.',
+      'Pres.',
+      'St.',
+      // Militär
+      'Lt.',
+      'Sgt.',
+      'Capt.',
+      'Gen.',
+      'Col.',
+      'Maj.',
+      'Pvt.',
+      'Cpl.',
+      'Adm.',
+      // Deutsche Abkürzungen
       'bzw.',
       'usw.',
       'etc.',
@@ -128,12 +162,49 @@ class DatabaseHelper {
       'd.h.',
       'u.a.',
       'o.ä.',
+      'u.ä.',
+      'u.U.',
+      'z.T.',
+      'i.d.R.',
+      'o.g.',
+      'n.Chr.',
+      'v.Chr.',
       'ggf.',
       'evtl.',
       'inkl.',
       'exkl.',
+      'bzgl.',
+      'vgl.',
+      'ebd.',
+      'lt.',
+      'sog.',
+      'mind.',
+      'max.',
+      'min.',
+      'vs.',
+      // Maße & Einheiten
       'Nr.',
       'Str.',
+      'Tel.',
+      'Std.',
+      'Sek.',
+      'Min.',
+      'Mio.',
+      'Mrd.',
+      // Wissenschaft & Literatur
+      'Hrsg.',
+      'Aufl.',
+      'Bd.',
+      'Jh.',
+      'Abs.',
+      'Art.',
+      'Kap.',
+      // Englisch allgemein
+      'No.',
+      'Vol.',
+      'i.e.',
+      'e.g.',
+      // Monate
       'Jan.',
       'Feb.',
       'Mär.',
@@ -149,7 +220,11 @@ class DatabaseHelper {
     ];
     final batch = db.batch();
     for (final abbr in abbreviations) {
-      batch.insert('abbreviations', {'abbreviation': abbr});
+      batch.insert(
+        'abbreviations',
+        {'abbreviation': abbr},
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
     }
     await batch.commit(noResult: true);
   }

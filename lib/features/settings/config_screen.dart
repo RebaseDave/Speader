@@ -11,6 +11,7 @@ import 'settings_provider.dart';
 import '../../core/database/orp_dao.dart';
 import '../../core/database/token_cache_dao.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 const _previewText =
     'Der Mann mit dem Mikrofon\n\n'
@@ -86,21 +87,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final PageController _pageController;
   int _currentPage = 0;
   bool _paused = true;
-  bool _paragraphPreview = false;
+  bool _paragraphPreview = SettingsService.instance.paragraphMode;
 
   @override
   void initState() {
     super.initState();
     _tokens = _buildTokens();
     _pageController = PageController();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   }
 
   @override
   void dispose() {
     _timer?.cancel();
     _pageController.dispose();
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarDividerColor: Colors.transparent,
+      systemNavigationBarContrastEnforced: false,
+      statusBarIconBrightness: Brightness.light,
+      systemNavigationBarIconBrightness: Brightness.light,
+    ));
     super.dispose();
   }
 
@@ -229,26 +236,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
 
-          // Preview-Modus Toggle
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            right: 8,
-            child: IconButton(
-              icon: Icon(
-                _paragraphPreview ? Icons.flash_on : Icons.article_outlined,
-                color: Colors.white.withValues(alpha: 0.6),
-              ),
-              tooltip: _paragraphPreview ? 'RSVP' : 'Absatz',
-              onPressed: () {
-                _timer?.cancel();
-                setState(() {
-                  _paragraphPreview = !_paragraphPreview;
-                  if (!_paragraphPreview && !_paused) _scheduleNext();
-                });
-              },
-            ),
-          ),
-
           // Transparentes Panel
           Positioned(
             bottom: 0,
@@ -286,7 +273,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     controller: _pageController,
                     onPageChanged: (i) => setState(() => _currentPage = i),
                     children: [
-                      _PausenPanel(onSettingsChanged: _restartTimer),
+                      _PausenPanel(
+                        onSettingsChanged: _restartTimer,
+                        onParagraphModeChanged: (val) {
+                          _timer?.cancel();
+                          setState(() {
+                            _paragraphPreview = val;
+                            if (!val && !_paused) _scheduleNext();
+                          });
+                        },
+                      ),
                       const _FarbprofilePanel(),
                       const _OrpFarbenPanel(),
                       const _FontsPanel(),
@@ -365,7 +361,11 @@ class _ParagraphPreview extends ConsumerWidget {
 
 class _PausenPanel extends ConsumerWidget {
   final VoidCallback onSettingsChanged;
-  const _PausenPanel({required this.onSettingsChanged});
+  final ValueChanged<bool> onParagraphModeChanged;
+  const _PausenPanel({
+    required this.onSettingsChanged,
+    required this.onParagraphModeChanged,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -373,7 +373,7 @@ class _PausenPanel extends ConsumerWidget {
     final n = ref.read(settingsProvider.notifier);
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, 16 + MediaQuery.of(context).padding.bottom),
       children: [
         _SwitchRow(
           label: 'Absatz-Modus',
@@ -381,6 +381,7 @@ class _PausenPanel extends ConsumerWidget {
           onChanged: (val) async {
             await SettingsService.instance.setParagraphMode(val);
             n.reload();
+            onParagraphModeChanged(val);
           },
         ),
         const Divider(color: Colors.white12, height: 16),
@@ -498,8 +499,28 @@ class _PausenPanel extends ConsumerWidget {
         const SizedBox(height: 24),
         const Divider(color: Colors.white12),
         const SizedBox(height: 8),
+        GestureDetector(
+          onTap: () => context.push('/orp-editor'),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              children: [
+                Icon(Icons.tune, size: 18, color: Colors.white38),
+                SizedBox(width: 10),
+                Text(
+                  'Ausnahmen',
+                  style: TextStyle(color: Colors.white38, fontSize: 14),
+                ),
+                Spacer(),
+                Icon(Icons.chevron_right, size: 18, color: Colors.white24),
+              ],
+            ),
+          ),
+        ),
+        const Divider(color: Colors.white12),
+        const SizedBox(height: 8),
         const _ResetColorsRow(),
-        const SizedBox(height: 4),
+        const SizedBox(height: 16),
         const _ResetOrpDbRow(),
         const SizedBox(height: 8),
       ],
@@ -1197,15 +1218,18 @@ class _ResetColorsRow extends ConsumerWidget {
           ref.read(settingsProvider.notifier).reload();
         }
       },
-      child: const Row(
-        children: [
-          Icon(Icons.refresh, size: 14, color: Colors.white24),
-          SizedBox(width: 8),
-          Text(
-            'Alle Farben zurücksetzen',
-            style: TextStyle(color: Colors.white24, fontSize: 12),
-          ),
-        ],
+      child: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.refresh, size: 18, color: Colors.white38),
+            SizedBox(width: 10),
+            Text(
+              'Alle Farben zurücksetzen',
+              style: TextStyle(color: Colors.white38, fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1251,15 +1275,18 @@ class _ResetOrpDbRow extends ConsumerWidget {
           await TokenCacheDao().deleteAllCaches();
         }
       },
-      child: const Row(
-        children: [
-          Icon(Icons.storage_outlined, size: 14, color: Colors.white24),
-          SizedBox(width: 8),
-          Text(
-            'ORP-Datenbank zurücksetzen',
-            style: TextStyle(color: Colors.white24, fontSize: 12),
-          ),
-        ],
+      child: const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Icon(Icons.storage_outlined, size: 18, color: Colors.white38),
+            SizedBox(width: 10),
+            Text(
+              'ORP-Datenbank zurücksetzen',
+              style: TextStyle(color: Colors.white38, fontSize: 14),
+            ),
+          ],
+        ),
       ),
     );
   }

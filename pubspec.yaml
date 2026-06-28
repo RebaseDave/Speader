@@ -100,15 +100,60 @@ flutter:
         - asset: assets/fonts/Literata-Regular.ttf
         - asset: assets/fonts/Literata-Bold.ttf
           weight: 700
-    - family: Lexie
+    - family: Spectral
       fonts:
-        - asset: assets/fonts/LexieReadable-Regular.ttf
-        - asset: assets/fonts/LexieReadable-Bold.ttf
+        - asset: assets/fonts/Spectral-Regular.ttf
+        - asset: assets/fonts/Spectral-Bold.ttf
           weight: 700
-    - family: Lora
+    - family: Fraunces
       fonts:
-        - asset: assets/fonts/Lora-Regular.ttf
-        - asset: assets/fonts/Lora-Bold.ttf
+        - asset: assets/fonts/Fraunces_72pt-Regular.ttf
+        - asset: assets/fonts/Fraunces_72pt-Bold.ttf
+          weight: 700
+    - family: EBGaramond
+      fonts:
+        - asset: assets/fonts/EBGaramond-Regular.ttf
+        - asset: assets/fonts/EBGaramond-Bold.ttf
+          weight: 700
+    - family: PlayfairDisplay
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay-Regular.ttf
+        - asset: assets/fonts/PlayfairDisplay-Bold.ttf
+          weight: 700
+    - family: CrimsonPro
+      fonts:
+        - asset: assets/fonts/CrimsonPro-Regular.ttf
+        - asset: assets/fonts/CrimsonPro-Bold.ttf
+          weight: 700
+    - family: Bitter
+      fonts:
+        - asset: assets/fonts/Bitter-Regular.ttf
+        - asset: assets/fonts/Bitter-Bold.ttf
+          weight: 700
+    - family: RobotoSlab
+      fonts:
+        - asset: assets/fonts/RobotoSlab-Regular.ttf
+        - asset: assets/fonts/RobotoSlab-Bold.ttf
+          weight: 700
+    - family: ZillaSlab
+      fonts:
+        - asset: assets/fonts/ZillaSlab-Regular.ttf
+        - asset: assets/fonts/ZillaSlab-Bold.ttf
+          weight: 700
+    - family: JosefinSlab
+      fonts:
+        - asset: assets/fonts/JosefinSlab-Regular.ttf
+        - asset: assets/fonts/JosefinSlab-Bold.ttf
+          weight: 700
+    - family: Gelasio
+      fonts:
+        - asset: assets/fonts/Gelasio-Regular.ttf
+        - asset: assets/fonts/Gelasio-Bold.ttf
+          weight: 700
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter_24pt-Regular.ttf
+        - asset: assets/fonts/Inter_24pt-Bold.ttf
           weight: 700
     - family: Nunito
       fonts:
@@ -120,33 +165,10 @@ flutter:
         - asset: assets/fonts/AtkinsonHyperlegible-Regular.ttf
         - asset: assets/fonts/AtkinsonHyperlegible-Bold.ttf
           weight: 700
-    - family: Cormorant
+    - family: Lexie
       fonts:
-        - asset: assets/fonts/Cormorant-Regular.ttf
-        - asset: assets/fonts/Cormorant-Bold.ttf
-          weight: 700
-    - family: Dekko
-      fonts:
-        - asset: assets/fonts/Dekko-Regular.ttf
-    - family: Fraunces
-      fonts:
-        - asset: assets/fonts/Fraunces_72pt-Regular.ttf
-        - asset: assets/fonts/Fraunces_72pt-Bold.ttf
-          weight: 700
-    - family: Merriweather
-      fonts:
-        - asset: assets/fonts/Merriweather_24pt-Regular.ttf
-        - asset: assets/fonts/Merriweather_24pt-Bold.ttf
-          weight: 700
-    - family: MerriweatherSans
-      fonts:
-        - asset: assets/fonts/MerriweatherSans-Regular.ttf
-        - asset: assets/fonts/MerriweatherSans-Bold.ttf
-          weight: 700
-    - family: Spectral
-      fonts:
-        - asset: assets/fonts/Spectral-Regular.ttf
-        - asset: assets/fonts/Spectral-Bold.ttf
+        - asset: assets/fonts/LexieReadable-Regular.ttf
+        - asset: assets/fonts/LexieReadable-Bold.ttf
           weight: 700
 
 

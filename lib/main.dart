@@ -14,6 +14,7 @@ import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'core/database/book_dao.dart';
 import 'core/database/orp_dao.dart';
 import 'epub/epub_importer.dart';
+import 'core/database/database_helper.dart';
 import 'dart:async';
 import 'features/companions/companion_screen.dart';
 
@@ -48,8 +49,17 @@ final _router = GoRouter(
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
+    systemNavigationBarContrastEnforced: false,
+    statusBarIconBrightness: Brightness.light,
+    systemNavigationBarIconBrightness: Brightness.light,
+  ));
   await SettingsService.instance.init();
+  await DatabaseHelper.instance.seedMissingAbbreviations();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -103,7 +113,16 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp.router(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarDividerColor: Colors.transparent,
+        systemNavigationBarContrastEnforced: false,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: MaterialApp.router(
       title: 'Speader',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -149,6 +168,7 @@ class _MyAppState extends ConsumerState<MyApp> {
         dividerColor: Colors.white12,
       ),
       routerConfig: _router,
-    );
+    ),
+  );
   }
 }

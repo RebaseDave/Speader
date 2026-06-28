@@ -170,6 +170,26 @@ class ReaderSettingsSheet extends ConsumerWidget {
                   if (paragraphMode) ...[
                     const Divider(color: Colors.white12),
                     const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Satz-Fokus',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                        Switch(
+                          value: settings.sentenceFocusEnabled,
+                          onChanged: (val) async {
+                            await service.setSentenceFocusEnabled(val);
+                            ref.read(settingsProvider.notifier).reload();
+                          },
+                          activeTrackColor:
+                              Theme.of(context).colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                    const Divider(color: Colors.white12),
+                    const SizedBox(height: 8),
                     const Text(
                       'Zeilenabstand',
                       style: TextStyle(color: Colors.white54, fontSize: 12),
@@ -206,7 +226,7 @@ class ReaderSettingsSheet extends ConsumerWidget {
                         ),
                       ],
                     ),
-                  ],
+                    ],
 
                   if (!paragraphMode) ...[
                     const SizedBox(height: 16),
@@ -435,99 +455,6 @@ class ReaderSettingsSheet extends ConsumerWidget {
                                   Icons.add,
                                   color: Colors.white,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ],
-
-                  if (!paragraphMode) ...[
-                    const SizedBox(height: 8),
-                    // Zentriert (unabhängig von ORP)
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Zentriert',
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
-                        ),
-                        Switch(
-                          value: settings.orpCentered,
-                          onChanged: (val) async {
-                            await ref
-                                .read(settingsProvider.notifier)
-                                .setOrpCentered(val);
-                          },
-                          activeTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Divider(color: Colors.white12),
-                    const SizedBox(height: 8),
-                    // Spotlight
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Spotlight',
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
-                        ),
-                        Switch(
-                          value: settings.spotlightEnabled,
-                          onChanged: (val) async {
-                            await service.setSpotlightEnabled(val);
-                            ref.read(settingsProvider.notifier).reload();
-                          },
-                          activeTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                        ),
-                      ],
-                    ),
-                    if (settings.spotlightEnabled) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Spotlight-Höhe',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              IconButton(
-                                onPressed: () async {
-                                  final newH = (settings.spotlightHeight - 10)
-                                      .clamp(40, 400);
-                                  await service.setSpotlightHeight(newH);
-                                  ref.read(settingsProvider.notifier).reload();
-                                },
-                                icon: const Icon(
-                                  Icons.remove,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              Text(
-                                '${settings.spotlightHeight}px',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: () async {
-                                  final newH = (settings.spotlightHeight + 10)
-                                      .clamp(40, 400);
-                                  await service.setSpotlightHeight(newH);
-                                  ref.read(settingsProvider.notifier).reload();
-                                },
-                                icon: const Icon(
-                                    Icons.add, color: Colors.white),
                               ),
                             ],
                           ),
