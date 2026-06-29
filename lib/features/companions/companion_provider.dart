@@ -70,7 +70,7 @@ class CompanionNotifier extends AsyncNotifier<CompanionState> {
   if (active.slot == 11 && !active.isUnlocked) return;
 
   final streak = await StreakService(SessionDao()).load();
-  final xp = _service.calculateXp(words, streak.streakDays, current.companions);
+  final xp = _service.calculateXp(words, streak.displayStreak, current.companions);
     if (xp <= 0) return;
 
     final previousXp = active.currentXp;

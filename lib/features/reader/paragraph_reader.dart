@@ -57,6 +57,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   double? _dragStartY;
   int _activeSentenceIndex = 0;
   bool _pendingLastSentence = false;
+  Timer? _autoTimer;
 
   @override
   void initState() {
@@ -72,6 +73,9 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
 
   @override
   void dispose() {
+    _autoTimer?.cancel();
+    ref.read(paragraphAutoModeProvider.notifier).state =
+        (active: false, wpm: 300);
     _clockTimer?.cancel();
     _brightnessIndicatorTimer?.cancel();
     ScreenBrightness.instance.resetScreenBrightness();
@@ -123,6 +127,71 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
       } else {
         _activeSentenceIndex = 0;
       }
+    });
+  }
+
+  void _activateAuto() {
+    final words =
+        ref.read(readerProvider.notifier).paragraphWordsAccumulated;
+    if (words < 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Mindestens 200 Wörter in dieser Session notwendig.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    final readSecs = _accumulatedSeconds +
+        (_readingStart != null
+            ? DateTime.now().difference(_readingStart!).inSeconds
+            : 0);
+    if (readSecs <= 0) return;
+    final wpm = (words / readSecs * 60).round().clamp(50, 1000);
+    ref.read(paragraphAutoModeProvider.notifier).state =
+        (active: true, wpm: wpm);
+    _scheduleAutoNext();
+  }
+
+  void _deactivateAuto() {
+    _autoTimer?.cancel();
+    final current = ref.read(paragraphAutoModeProvider);
+    ref.read(paragraphAutoModeProvider.notifier).state =
+        (active: false, wpm: current.wpm);
+  }
+
+  void _scheduleAutoNext() {
+    _autoTimer?.cancel();
+    if (!mounted) return;
+    final auto = ref.read(paragraphAutoModeProvider);
+    if (!auto.active) return;
+
+    final sentences = _data?.sentences ?? [];
+    if (sentences.isEmpty) {
+      _deactivateAuto();
+      return;
+    }
+
+    final current = _activeSentenceIndex < sentences.length
+        ? sentences[_activeSentenceIndex]
+        : '';
+    final wordCount =
+        current.split(' ').where((w) => w.isNotEmpty).length.clamp(1, 999);
+    final isLast = _activeSentenceIndex >= sentences.length - 1;
+
+    double secs = (wordCount / auto.wpm) * 60;
+    if (secs < 0.8) secs = 0.8;
+    if (isLast) secs *= 1.8;
+
+    _autoTimer = Timer(Duration(milliseconds: (secs * 1000).round()), () {
+      if (!mounted || !ref.read(paragraphAutoModeProvider).active) return;
+      _nextSentence();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && ref.read(paragraphAutoModeProvider).active) {
+          _scheduleAutoNext();
+        }
+      });
     });
   }
 
@@ -318,6 +387,13 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
       _refresh();
     });
 
+    // Auto-Modus: WPM-Änderung via Volume Keys → Timer neu starten
+    ref.listen(paragraphAutoModeProvider, (prev, next) {
+      if ((prev?.active ?? false) && next.active && prev?.wpm != next.wpm) {
+        _scheduleAutoNext();
+      }
+    });
+
     // Session speichern wenn Modus wechselt
     ref.listen(settingsProvider.select((s) => s.paragraphMode), (prev, next) {
       if (prev == true && next == false) _saveSession();
@@ -351,6 +427,10 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
           onTapUp: _overlayVisible
               ? null
               : (details) {
+                  if (ref.read(paragraphAutoModeProvider).active) {
+                    _deactivateAuto();
+                    return;
+                  }
                   final half = MediaQuery.of(context).size.width / 2;
                   if (settings.sentenceFocusEnabled) {
                     if (details.globalPosition.dx > half) {
@@ -366,6 +446,15 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
                     }
                   }
                 },
+          onHorizontalDragEnd: (details) {
+            if (_overlayVisible) return;
+            final v = details.primaryVelocity ?? 0;
+            if (v > 300) {
+              _activateAuto();
+            } else if (v < -300) {
+              _deactivateAuto();
+            }
+          },
           onVerticalDragStart: (details) {
             _dragStartY = details.globalPosition.dy;
           },
@@ -673,6 +762,33 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
                   ),
                 ),
               ],
+
+              // Auto-Modus Indikator
+              if (ref.watch(paragraphAutoModeProvider).active && !_overlayVisible)
+                Positioned(
+                  top: MediaQuery.of(context).padding.top + 16,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Auto · ${ref.watch(paragraphAutoModeProvider).wpm} WPM',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
 
               // Tagesziel-Celebration
               if (_showGoalCelebration)

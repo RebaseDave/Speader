@@ -430,6 +430,8 @@ class ReaderNotifier extends Notifier<ReaderState> {
     return buf.toString();
   }
 
+  int get paragraphWordsAccumulated => _paragraphWordsAccumulated;
+
   void adjustWpm(int delta) {
     final settings = SettingsService.instance;
     final newWpm = (settings.wpm + delta).clamp(50, 1000);
@@ -600,3 +602,6 @@ class ReaderNotifier extends Notifier<ReaderState> {
 final readerProvider = NotifierProvider<ReaderNotifier, ReaderState>(
   ReaderNotifier.new,
 );
+
+final paragraphAutoModeProvider =
+    StateProvider<({bool active, int wpm})>((ref) => (active: false, wpm: 300));

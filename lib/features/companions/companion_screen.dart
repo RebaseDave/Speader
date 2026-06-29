@@ -188,7 +188,7 @@ class _XpBar extends StatelessWidget {
               style: const TextStyle(fontSize: 13, color: Colors.white54),
             ),
             Text(
-              '${companion.currentXp} gesamt',
+              isAtCap ? '' : '${Companion.xpPerLevel - companion.xpInCurrentLevel} bis Level ${companion.level + 1}',
               style: const TextStyle(fontSize: 13, color: Colors.white38),
             ),
             Text(
@@ -217,7 +217,7 @@ class _BonusInfo extends ConsumerWidget {
             .length;
         final level50Bonus = level50Count * 10;
 
-        final streakDays = ref.watch(streakProvider).value?.streakDays ?? 0;
+        final streakDays = ref.watch(streakProvider).value?.displayStreak ?? 0;
         final streakBonus = (streakDays * 1).clamp(0, 50).toInt();
 
         final totalBonus = level50Bonus + streakBonus;
