@@ -76,21 +76,10 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
 
     _volumeChannel.setMethodCallHandler((call) async {
       if (SettingsService.instance.paragraphMode) {
-        final auto = ref.read(paragraphAutoModeProvider);
-        if (auto.active) {
-          if (call.method == 'volumeUp') {
-            ref.read(paragraphAutoModeProvider.notifier).state =
-                (active: true, wpm: (auto.wpm + 5).clamp(50, 1000));
-          } else if (call.method == 'volumeDown') {
-            ref.read(paragraphAutoModeProvider.notifier).state =
-                (active: true, wpm: (auto.wpm - 5).clamp(50, 1000));
-          }
-        } else {
-          if (call.method == 'volumeUp') {
-            ref.read(readerProvider.notifier).nextParagraph();
-          } else if (call.method == 'volumeDown') {
-            ref.read(readerProvider.notifier).prevParagraph();
-          }
+        if (call.method == 'volumeUp') {
+          ref.read(readerProvider.notifier).nextParagraph();
+        } else if (call.method == 'volumeDown') {
+          ref.read(readerProvider.notifier).prevParagraph();
         }
       } else {
         if (call.method == 'volumeUp') {

@@ -603,5 +603,4 @@ final readerProvider = NotifierProvider<ReaderNotifier, ReaderState>(
   ReaderNotifier.new,
 );
 
-final paragraphAutoModeProvider =
-    StateProvider<({bool active, int wpm})>((ref) => (active: false, wpm: 300));
+final paragraphAutoModeProvider = StateProvider<bool>((ref) => false);

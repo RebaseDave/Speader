@@ -59,6 +59,11 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   bool _pendingLastSentence = false;
   Timer? _autoTimer;
 
+  // Tap-Timing Tracking
+  final List<(int words, double secs)> _tapSamples = [];
+  int _trackedWords = 0;
+  DateTime? _lastTapTime;
+
   @override
   void initState() {
     super.initState();
@@ -74,8 +79,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   @override
   void dispose() {
     _autoTimer?.cancel();
-    ref.read(paragraphAutoModeProvider.notifier).state =
-        (active: false, wpm: 300);
+    ref.read(paragraphAutoModeProvider.notifier).state = false;
     _clockTimer?.cancel();
     _brightnessIndicatorTimer?.cancel();
     ScreenBrightness.instance.resetScreenBrightness();
@@ -131,41 +135,30 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   }
 
   void _activateAuto() {
-    final words =
-        ref.read(readerProvider.notifier).paragraphWordsAccumulated;
-    if (words < 200) {
+    if (_trackedWords < 300) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
-              'Mindestens 200 Wörter in dieser Session notwendig.'),
-          duration: Duration(seconds: 2),
+              'Mindestens 300 getippte Wörter notwendig. Aktuell: $_trackedWords'),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
     }
-    final readSecs = _accumulatedSeconds +
-        (_readingStart != null
-            ? DateTime.now().difference(_readingStart!).inSeconds
-            : 0);
-    if (readSecs <= 0) return;
-    final wpm = (words / readSecs * 60).round().clamp(50, 1000);
-    ref.read(paragraphAutoModeProvider.notifier).state =
-        (active: true, wpm: wpm);
+    ref.read(paragraphAutoModeProvider.notifier).state = true;
     _scheduleAutoNext();
   }
 
   void _deactivateAuto() {
     _autoTimer?.cancel();
-    final current = ref.read(paragraphAutoModeProvider);
-    ref.read(paragraphAutoModeProvider.notifier).state =
-        (active: false, wpm: current.wpm);
+    ref.read(paragraphAutoModeProvider.notifier).state = false;
+    _lastTapTime = null;
   }
 
   void _scheduleAutoNext() {
     _autoTimer?.cancel();
     if (!mounted) return;
-    final auto = ref.read(paragraphAutoModeProvider);
-    if (!auto.active) return;
+    if (!ref.read(paragraphAutoModeProvider)) return;
 
     final sentences = _data?.sentences ?? [];
     if (sentences.isEmpty) {
@@ -180,19 +173,84 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
         current.split(' ').where((w) => w.isNotEmpty).length.clamp(1, 999);
     final isLast = _activeSentenceIndex >= sentences.length - 1;
 
-    double secs = (wordCount / auto.wpm) * 60;
-    if (secs < 0.8) secs = 0.8;
-    if (isLast) secs *= 1.8;
+    double secs = _calcSecsForWords(wordCount);
+    if (isLast) secs += 1.0;
 
     _autoTimer = Timer(Duration(milliseconds: (secs * 1000).round()), () {
-      if (!mounted || !ref.read(paragraphAutoModeProvider).active) return;
+      if (!mounted || !ref.read(paragraphAutoModeProvider)) return;
       _nextSentence();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && ref.read(paragraphAutoModeProvider).active) {
-          _scheduleAutoNext();
-        }
+        if (!mounted || !ref.read(paragraphAutoModeProvider)) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && ref.read(paragraphAutoModeProvider)) {
+            _scheduleAutoNext();
+          }
+        });
       });
     });
+  }
+
+  void _recordTapSample() {
+    final now = DateTime.now();
+    if (_lastTapTime != null && _data != null) {
+      final elapsed = now.difference(_lastTapTime!).inMilliseconds / 1000.0;
+      if (elapsed > 0.1 && elapsed < 30.0) {
+        final sentences = _data!.sentences;
+        if (_activeSentenceIndex < sentences.length) {
+          final wordCount = sentences[_activeSentenceIndex]
+              .split(' ')
+              .where((w) => w.isNotEmpty)
+              .length;
+          if (wordCount > 0) {
+            _tapSamples.add((wordCount, elapsed));
+            _trackedWords += wordCount;
+          }
+        }
+      }
+    }
+    _lastTapTime = now;
+  }
+
+  double _calcSecsForWords(int wordCount) {
+    if (_tapSamples.isEmpty) return wordCount / 3.0;
+
+    // Globaler WPS als Fallback
+    final totalWords = _tapSamples.fold<int>(0, (s, e) => s + e.$1);
+    final totalSecs = _tapSamples.fold<double>(0, (s, e) => s + e.$2);
+    final globalWps = totalWords / totalSecs;
+
+    // Nachbarn: Samples mit wordCount im Bereich [wordCount-2, wordCount+2]
+    final neighbors = _tapSamples
+        .where((s) => (s.$1 - wordCount).abs() <= 2)
+        .toList();
+
+    if (neighbors.length >= 3) {
+      final avgSecs = neighbors.fold<double>(0, (s, e) => s + e.$2) /
+          neighbors.length;
+      // Skalieren auf tatsächliche Wortanzahl
+      final avgWords = neighbors.fold<double>(0, (s, e) => s + e.$1) /
+          neighbors.length;
+      return avgSecs * (wordCount / avgWords);
+    }
+
+    // Interpolation: nächster kleinerer und größerer Cluster
+    final smaller = _tapSamples
+        .where((s) => s.$1 < wordCount)
+        .toList()
+      ..sort((a, b) => b.$1.compareTo(a.$1));
+    final larger = _tapSamples
+        .where((s) => s.$1 > wordCount)
+        .toList()
+      ..sort((a, b) => a.$1.compareTo(b.$1));
+
+    if (smaller.isNotEmpty && larger.isNotEmpty) {
+      final wpsSmall = smaller.first.$1 / smaller.first.$2;
+      final wpsLarge = larger.first.$1 / larger.first.$2;
+      final interpolatedWps = (wpsSmall + wpsLarge) / 2;
+      return wordCount / interpolatedWps;
+    }
+
+    return wordCount / globalWps;
   }
 
   void _nextSentence() {
@@ -201,6 +259,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
       ref.read(readerProvider.notifier).nextParagraph();
       return;
     }
+    _recordTapSample();
     if (_activeSentenceIndex < sentences.length - 1) {
       setState(() => _activeSentenceIndex++);
     } else {
@@ -234,6 +293,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
           .inSeconds;
       _readingStart = null;
     }
+    _lastTapTime = null;
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
     setState(() => _overlayVisible = true);
     await _saveSession();
@@ -387,13 +447,6 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
       _refresh();
     });
 
-    // Auto-Modus: WPM-Änderung via Volume Keys → Timer neu starten
-    ref.listen(paragraphAutoModeProvider, (prev, next) {
-      if ((prev?.active ?? false) && next.active && prev?.wpm != next.wpm) {
-        _scheduleAutoNext();
-      }
-    });
-
     // Session speichern wenn Modus wechselt
     ref.listen(settingsProvider.select((s) => s.paragraphMode), (prev, next) {
       if (prev == true && next == false) _saveSession();
@@ -427,7 +480,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
           onTapUp: _overlayVisible
               ? null
               : (details) {
-                  if (ref.read(paragraphAutoModeProvider).active) {
+                  if (ref.read(paragraphAutoModeProvider)) {
                     _deactivateAuto();
                     return;
                   }
@@ -764,7 +817,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
               ],
 
               // Auto-Modus Indikator
-              if (ref.watch(paragraphAutoModeProvider).active && !_overlayVisible)
+              if (ref.watch(paragraphAutoModeProvider) && !_overlayVisible)
                 Positioned(
                   top: MediaQuery.of(context).padding.top + 16,
                   left: 0,
@@ -779,7 +832,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'Auto · ${ref.watch(paragraphAutoModeProvider).wpm} WPM',
+                          'Auto',
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.primary,
                             fontSize: 12,
