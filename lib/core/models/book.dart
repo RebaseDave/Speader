@@ -7,10 +7,11 @@ class Book {
   final int currentChapter;
   final DateTime importedAt;
   final bool isArchived;
+  final bool isDeleted;
   final String? series;
+  final String? author;
 
-  bool get isBook => totalWords >= 20000;
-  bool get isDeep => totalWords >= 6000 && totalWords < 20000;
+  bool get isBook => !isManual && !isExplain;
   bool get isExplain => series == '__erklaerung__';
   bool get isManual => series == '__manuell__';
 
@@ -23,7 +24,9 @@ class Book {
     required this.currentChapter,
     required this.importedAt,
     this.isArchived = false,
+    this.isDeleted = false,
     this.series,
+    this.author,
   });
 
   Book copyWith({
@@ -35,7 +38,9 @@ class Book {
     int? currentChapter,
     DateTime? importedAt,
     bool? isArchived,
+    bool? isDeleted,
     Object? series = _sentinel,
+    Object? author = _sentinel,
   }) {
     return Book(
       id: id ?? this.id,
@@ -46,7 +51,9 @@ class Book {
       currentChapter: currentChapter ?? this.currentChapter,
       importedAt: importedAt ?? this.importedAt,
       isArchived: isArchived ?? this.isArchived,
+      isDeleted: isDeleted ?? this.isDeleted,
       series: series == _sentinel ? this.series : series as String?,
+      author: author == _sentinel ? this.author : author as String?,
     );
   }
 
@@ -60,7 +67,9 @@ class Book {
       'current_chapter': currentChapter,
       'imported_at': importedAt.toIso8601String(),
       'is_archived': isArchived ? 1 : 0,
+      'is_deleted': isDeleted ? 1 : 0,
       'series': series,
+      'author': author,
     };
   }
 
@@ -74,7 +83,9 @@ class Book {
       currentChapter: map['current_chapter'] as int,
       importedAt: DateTime.parse(map['imported_at'] as String),
       isArchived: (map['is_archived'] as int? ?? 0) == 1,
+      isDeleted: (map['is_deleted'] as int? ?? 0) == 1,
       series: map['series'] as String?,
+      author: map['author'] as String?,
     );
   }
 }

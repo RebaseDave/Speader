@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'explain_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 class ExplainSheet extends ConsumerWidget {
   const ExplainSheet({super.key});
@@ -13,7 +14,7 @@ class ExplainSheet extends ConsumerWidget {
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 24),
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF112240),
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(

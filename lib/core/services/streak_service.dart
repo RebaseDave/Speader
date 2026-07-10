@@ -1,6 +1,6 @@
 import '../database/session_dao.dart';
 
-const int kDailyGoalWords = 5000;
+const int kDailyGoalWords = 3000;
 
 class StreakData {
   final int todayWords;

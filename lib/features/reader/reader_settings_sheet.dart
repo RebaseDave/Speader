@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/settings_service.dart';
 import '../settings/settings_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 class ReaderSettingsSheet extends ConsumerWidget {
   final bool paragraphMode;
@@ -16,9 +17,9 @@ class ReaderSettingsSheet extends ConsumerWidget {
     return Container(
       // Max 40% der Bildschirmhöhe damit die Schrift sichtbar bleibt
       constraints: BoxConstraints(maxHeight: screenHeight * 0.40),
-      decoration: const BoxDecoration(
-        color: Color(0xFF1A1A2E),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      decoration: BoxDecoration(
+        color: context.colors.surfaceElevated,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -41,7 +42,12 @@ class ReaderSettingsSheet extends ConsumerWidget {
           // Scrollbarer Inhalt
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                8,
+                20,
+                24 + MediaQuery.of(context).padding.bottom,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -150,6 +156,47 @@ class ReaderSettingsSheet extends ConsumerWidget {
                     ],
                   ),
 
+                  if (paragraphMode) ...[
+                    const Divider(color: Colors.white12),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Zeilenabstand',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          onPressed: () async {
+                            final newH = (settings.paragraphLineHeight - 0.1)
+                                .clamp(1.2, 2.5);
+                            await service.setParagraphLineHeight(newH);
+                            ref.read(settingsProvider.notifier).reload();
+                          },
+                          icon: const Icon(Icons.remove, color: Colors.white),
+                        ),
+                        Text(
+                          settings.paragraphLineHeight.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () async {
+                            final newH = (settings.paragraphLineHeight + 0.1)
+                                .clamp(1.2, 2.5);
+                            await service.setParagraphLineHeight(newH);
+                            ref.read(settingsProvider.notifier).reload();
+                          },
+                          icon: const Icon(Icons.add, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ],
+
                   const Divider(color: Colors.white12),
                   const SizedBox(height: 8),
 
@@ -190,39 +237,21 @@ class ReaderSettingsSheet extends ConsumerWidget {
                     ),
                     const Divider(color: Colors.white12),
                     const SizedBox(height: 8),
-                    const Text(
-                      'Zeilenabstand',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
-                    ),
-                    const SizedBox(height: 8),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        IconButton(
-                          onPressed: () async {
-                            final newH = (settings.paragraphLineHeight - 0.1)
-                                .clamp(1.2, 2.5);
-                            await service.setParagraphLineHeight(newH);
+                        const Text(
+                          'Auto-Scroll',
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                        Switch(
+                          value: settings.paragraphAutoScroll,
+                          onChanged: (val) async {
+                            await service.setParagraphAutoScroll(val);
                             ref.read(settingsProvider.notifier).reload();
                           },
-                          icon: const Icon(Icons.remove, color: Colors.white),
-                        ),
-                        Text(
-                          settings.paragraphLineHeight.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () async {
-                            final newH = (settings.paragraphLineHeight + 0.1)
-                                .clamp(1.2, 2.5);
-                            await service.setParagraphLineHeight(newH);
-                            ref.read(settingsProvider.notifier).reload();
-                          },
-                          icon: const Icon(Icons.add, color: Colors.white),
+                          activeTrackColor:
+                              Theme.of(context).colorScheme.primary,
                         ),
                       ],
                     ),

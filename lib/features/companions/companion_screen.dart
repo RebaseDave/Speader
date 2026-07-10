@@ -5,6 +5,7 @@ import 'companion_definition.dart';
 import 'companion_provider.dart';
 import 'companion_collection_sheet.dart';
 import '../library/streak_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 class CompanionScreen extends ConsumerWidget {
   const CompanionScreen({super.key});
@@ -13,7 +14,7 @@ class CompanionScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final asyncState = ref.watch(companionProvider);
     return Scaffold(
-      backgroundColor: const Color(0xFF0A1628),
+      backgroundColor: context.colors.background,
       appBar: AppBar(title: const Text('Begleiter')),
       body: asyncState.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -39,8 +40,8 @@ class _CompanionBody extends ConsumerWidget {
     final def = CompanionDefinition.forSlot(companion.slot);
     final isPrestige = companion.showPrestigeStyle;
     final levelColor = isPrestige
-        ? const Color(0xFFFFD700)
-        : const Color(0xFF00B4D8);
+        ? context.colors.gold
+        : context.colors.accent;
     final levelText = isPrestige
         ? '★${companion.level - 100}'
         : 'Level ${companion.level}';
@@ -97,10 +98,10 @@ class _CompanionBody extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (isPrestige) ...[
-                const Icon(
+                Icon(
                   Icons.workspace_premium,
                   size: 18,
-                  color: Color(0xFFFFD700),
+                  color: context.colors.gold,
                 ),
                 const SizedBox(width: 4),
               ],
@@ -138,8 +139,8 @@ class _CompanionBody extends ConsumerWidget {
               icon: const Icon(Icons.collections_bookmark_outlined),
               label: const Text('Sammlung'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF00B4D8),
-                side: const BorderSide(color: Color(0xFF00B4D8)),
+                foregroundColor: context.colors.accent,
+                side: BorderSide(color: context.colors.accent),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

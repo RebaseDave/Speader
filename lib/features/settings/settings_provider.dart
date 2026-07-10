@@ -33,6 +33,7 @@ class SettingsState {
   final double paragraphLineHeight;
   final double paragraphFontSize;
   final bool sentenceFocusEnabled;
+  final bool paragraphAutoScroll;
 
   const SettingsState({
     required this.wpm,
@@ -65,6 +66,7 @@ class SettingsState {
     required this.paragraphLineHeight,
     required this.paragraphFontSize,
     required this.sentenceFocusEnabled,
+    required this.paragraphAutoScroll,
   });
 
   factory SettingsState.fromService(SettingsService s) {
@@ -97,6 +99,7 @@ class SettingsState {
       paragraphLineHeight: s.paragraphLineHeight,
       paragraphFontSize: s.paragraphFontSize,
       sentenceFocusEnabled: s.sentenceFocusEnabled,
+      paragraphAutoScroll: s.paragraphAutoScroll,
       activeColorProfile: s.activeColorProfile,
       colorProfileNames: {
         'a': s.colorProfileName('a'),
@@ -139,6 +142,7 @@ class SettingsState {
     double? paragraphLineHeight,
     double? paragraphFontSize,
     bool? sentenceFocusEnabled,
+    bool? paragraphAutoScroll,
   }) {
     return SettingsState(
       wpm: wpm ?? this.wpm,
@@ -171,6 +175,7 @@ class SettingsState {
       paragraphLineHeight: paragraphLineHeight ?? this.paragraphLineHeight,
       paragraphFontSize: paragraphFontSize ?? this.paragraphFontSize,
       sentenceFocusEnabled: sentenceFocusEnabled ?? this.sentenceFocusEnabled,
+      paragraphAutoScroll: paragraphAutoScroll ?? this.paragraphAutoScroll,
     );
   }
 }
@@ -335,6 +340,11 @@ class SettingsNotifier extends Notifier<SettingsState> {
   Future<void> setSentenceFocusEnabled(bool value) async {
     await _service.setSentenceFocusEnabled(value);
     state = state.copyWith(sentenceFocusEnabled: value);
+  }
+
+  Future<void> setParagraphAutoScroll(bool value) async {
+    await _service.setParagraphAutoScroll(value);
+    state = state.copyWith(paragraphAutoScroll: value);
   }
 
   void reload() {

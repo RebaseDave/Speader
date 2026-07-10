@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart' as p;
 import '../models/book.dart';
 import '../models/chapter.dart';
 import 'database_helper.dart';
@@ -20,7 +21,7 @@ class BookDao {
         FROM read_sessions
         GROUP BY book_id
       ) s ON b.id = s.book_id
-      WHERE b.is_archived = 0
+      WHERE b.is_archived = 0 AND b.is_deleted = 0
       ORDER BY COALESCE(s.last_read, b.imported_at) DESC
     ''');
     return maps.map((m) => Book.fromMap(m)).toList();
@@ -62,10 +63,48 @@ class BookDao {
         FROM read_sessions
         GROUP BY book_id
       ) s ON b.id = s.book_id
-      WHERE b.is_archived = 1
+      WHERE b.is_archived = 1 AND b.is_deleted = 0
       ORDER BY COALESCE(s.last_read, b.imported_at) DESC
     ''');
     return maps.map((m) => Book.fromMap(m)).toList();
+  }
+
+  /// Alle Bücher inkl. soft-gelöschter — nur für Backup-Export gedacht,
+  /// damit auch gelöschte Bücher ihre Stats-Metadaten mitgeben können.
+  Future<List<Book>> getAllBooksForBackup() async {
+    final db = await _db;
+    final maps = await db.query('books');
+    return maps.map((m) => Book.fromMap(m)).toList();
+  }
+
+  /// Sucht ein soft-gelöschtes Buch anhand des Dateinamens (für Reimport-
+  /// Wiedererkennung und Phantom-Buch-Matching beim Backup-Import).
+  Future<Book?> getDeletedBookByFileName(String fileName) async {
+    final db = await _db;
+    final maps = await db.query('books', where: 'is_deleted = 1');
+    for (final m in maps) {
+      final book = Book.fromMap(m);
+      if (p.basename(book.filePath) == fileName) return book;
+    }
+    return null;
+  }
+
+  /// Reaktiviert ein soft-gelöschtes Buch mit frischen Metadaten
+  /// (behält die bestehende id, damit Sessions/Summaries weiter passen).
+  Future<void> reactivateBook(int id, Book book) async {
+    final db = await _db;
+    final map = book.toMap()..remove('id');
+    map['is_deleted'] = 0;
+    await db.update('books', map, where: 'id = ?', whereArgs: [id]);
+  }
+
+  /// Legt ein "Phantom"-Buch an: nur Metadaten für die Stats-JOIN-Bedingung,
+  /// sofort als gelöscht markiert (keine echte Datei vorhanden).
+  Future<int> insertBookDeleted(Book book) async {
+    final db = await _db;
+    final map = book.toMap()..remove('id');
+    map['is_deleted'] = 1;
+    return await db.insert('books', map);
   }
 
   Future<void> updateProgress(int bookId, int currentWord, int currentChapter) async {
@@ -80,7 +119,15 @@ class BookDao {
 
   Future<void> deleteBook(int bookId) async {
     final db = await _db;
-    await db.delete('books', where: 'id = ?', whereArgs: [bookId]);
+    // Soft-Delete: Zeile bleibt bestehen, damit Stats (INNER JOIN in
+    // session_dao.dart) für immer intakt bleiben, egal ob das Buch je
+    // wieder importiert wird.
+    await db.update(
+      'books',
+      {'is_deleted': 1},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
     await db.delete('chapters', where: 'book_id = ?', whereArgs: [bookId]);
     await db.delete('token_cache', where: 'book_id = ?', whereArgs: [bookId]);
   }

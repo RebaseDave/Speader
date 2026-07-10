@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'companion.dart';
 import 'companion_definition.dart';
 import 'companion_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 class CompanionCollectionSheet extends ConsumerWidget {
   const CompanionCollectionSheet({super.key});
@@ -13,9 +14,9 @@ class CompanionCollectionSheet extends ConsumerWidget {
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.78,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0A1628),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      decoration: BoxDecoration(
+        color: context.colors.background,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
         children: [
@@ -94,7 +95,7 @@ class _CompanionCell extends StatelessWidget {
     final isActive = companion.isActive;
     final isPrestige = companion.showPrestigeStyle;
     final levelColor =
-        isPrestige ? const Color(0xFFFFD700) : const Color(0xFF00B4D8);
+        isPrestige ? context.colors.gold : context.colors.accent;
     final levelText = isPrestige
         ? '★${companion.level - 100}'
         : 'Lv. ${companion.level}';
@@ -105,17 +106,17 @@ class _CompanionCell extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          color: const Color(0xFF112240),
+          color: context.colors.surface,
           border: Border.all(
             color: isActive
-                ? const Color(0xFF00B4D8)
+                ? context.colors.accent
                 : Colors.white12,
             width: isActive ? 2 : 1,
           ),
           boxShadow: isActive
               ? [
-                  const BoxShadow(
-                    color: Color(0x3300B4D8),
+                  BoxShadow(
+                    color: context.colors.accent.withValues(alpha: 0.2),
                     blurRadius: 12,
                     spreadRadius: 2,
                   ),
@@ -171,10 +172,10 @@ class _CompanionCell extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (isPrestige) ...[
-                    const Icon(
+                    Icon(
                       Icons.workspace_premium,
                       size: 10,
-                      color: Color(0xFFFFD700),
+                      color: context.colors.gold,
                     ),
                     const SizedBox(width: 2),
                   ],

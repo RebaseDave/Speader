@@ -31,7 +31,8 @@ class DatabaseHelper {
         current_chapter INTEGER NOT NULL DEFAULT 0,
         imported_at     TEXT NOT NULL,
         is_archived     INTEGER NOT NULL DEFAULT 0,
-        series          TEXT
+        series          TEXT,
+        author          TEXT
       )
     ''');
 
@@ -67,6 +68,7 @@ class DatabaseHelper {
         is_dash_end      INTEGER NOT NULL DEFAULT 0,
         is_paragraph_end INTEGER NOT NULL DEFAULT 0,
         is_chapter_title INTEGER NOT NULL DEFAULT 0,
+        is_italic        INTEGER NOT NULL DEFAULT 0,
         chapter_index    INTEGER NOT NULL,
         PRIMARY KEY (book_id, word_index)
       )
@@ -112,6 +114,50 @@ class DatabaseHelper {
 
     await _insertDefaultCompanions(db);
     await _insertDefaultAbbreviations(db);
+    await _createScoreboardTables(db);
+  }
+
+  Future<void> seedScoreboardTables() async {
+    final db = await database;
+    await _createScoreboardTables(db);
+  }
+
+  Future<void> _createScoreboardTables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS scoreboard_games (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_type    TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        player_names TEXT NOT NULL,
+        score_target INTEGER,
+        created_at   TEXT NOT NULL,
+        is_finished  INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS scoreboard_rounds (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id      INTEGER NOT NULL,
+        round_number INTEGER NOT NULL,
+        data         TEXT NOT NULL,
+        FOREIGN KEY (game_id) REFERENCES scoreboard_games(id)
+      )
+    ''');
+  }
+
+  Future<void> seedMissingColumns() async {
+    final db = await database;
+    try {
+      await db.execute('ALTER TABLE books ADD COLUMN author TEXT');
+    } catch (_) {}
+    try {
+      await db.execute(
+          'ALTER TABLE books ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0');
+    } catch (_) {}
+    try {
+      await db.execute(
+          'ALTER TABLE token_cache ADD COLUMN is_italic INTEGER NOT NULL DEFAULT 0');
+    } catch (_) {}
   }
 
   Future<void> seedMissingAbbreviations() async {
@@ -217,6 +263,11 @@ class DatabaseHelper {
       'Nov.',
       'Dez.',
       '...',
+      // Ordinalzahlen
+      '1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.', '10.',
+      '11.', '12.', '13.', '14.', '15.', '16.', '17.', '18.', '19.', '20.',
+      '21.', '22.', '23.', '24.', '25.', '26.', '27.', '28.', '29.', '30.',
+      '31.',
     ];
     final batch = db.batch();
     for (final abbr in abbreviations) {

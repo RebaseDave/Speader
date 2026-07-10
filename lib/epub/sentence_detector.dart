@@ -48,6 +48,9 @@ class SentenceDetector {
     return raw.startsWith('__CHAPTER__:');
   }
 
+  static bool isItalicStartMarker(String raw) => raw == '__ITALIC_START__';
+  static bool isItalicEndMarker(String raw) => raw == '__ITALIC_END__';
+
   /// Extrahiert den Kapiteltitel aus einem Kapitel-Marker
   static String extractChapterTitle(String raw) {
     return raw.replaceFirst('__CHAPTER__:', '').trim();

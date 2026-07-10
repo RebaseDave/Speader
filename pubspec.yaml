@@ -75,6 +75,10 @@ dependencies:
   #Android öffnen mit für Epub direktimport:
   receive_sharing_intent: ^1.8.0
 
+  # Backup & Export
+  archive: ^3.6.1
+  share_plus: ^10.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -100,36 +104,34 @@ flutter:
         - asset: assets/fonts/Literata-Regular.ttf
         - asset: assets/fonts/Literata-Bold.ttf
           weight: 700
+        - asset: assets/fonts/Literata-Italic.ttf
+          style: italic
     - family: Spectral
       fonts:
         - asset: assets/fonts/Spectral-Regular.ttf
         - asset: assets/fonts/Spectral-Bold.ttf
-          weight: 700
-    - family: Fraunces
-      fonts:
-        - asset: assets/fonts/Fraunces_72pt-Regular.ttf
-        - asset: assets/fonts/Fraunces_72pt-Bold.ttf
-          weight: 700
-    - family: EBGaramond
-      fonts:
-        - asset: assets/fonts/EBGaramond-Regular.ttf
-        - asset: assets/fonts/EBGaramond-Bold.ttf
           weight: 700
     - family: PlayfairDisplay
       fonts:
         - asset: assets/fonts/PlayfairDisplay-Regular.ttf
         - asset: assets/fonts/PlayfairDisplay-Bold.ttf
           weight: 700
+        - asset: assets/fonts/PlayfairDisplay-Italic.ttf
+          style: italic
     - family: CrimsonPro
       fonts:
         - asset: assets/fonts/CrimsonPro-Regular.ttf
         - asset: assets/fonts/CrimsonPro-Bold.ttf
           weight: 700
+        - asset: assets/fonts/CrimsonPro-Italic.ttf
+          style: italic
     - family: Bitter
       fonts:
         - asset: assets/fonts/Bitter-Regular.ttf
         - asset: assets/fonts/Bitter-Bold.ttf
           weight: 700
+        - asset: assets/fonts/Bitter-Italic.ttf
+          style: italic
     - family: RobotoSlab
       fonts:
         - asset: assets/fonts/RobotoSlab-Regular.ttf
@@ -140,36 +142,84 @@ flutter:
         - asset: assets/fonts/ZillaSlab-Regular.ttf
         - asset: assets/fonts/ZillaSlab-Bold.ttf
           weight: 700
+        - asset: assets/fonts/ZillaSlab-Italic.ttf
+          style: italic
     - family: JosefinSlab
       fonts:
         - asset: assets/fonts/JosefinSlab-Regular.ttf
         - asset: assets/fonts/JosefinSlab-Bold.ttf
           weight: 700
+        - asset: assets/fonts/JosefinSlab-Italic.ttf
+          style: italic
     - family: Gelasio
       fonts:
         - asset: assets/fonts/Gelasio-Regular.ttf
         - asset: assets/fonts/Gelasio-Bold.ttf
           weight: 700
-    - family: Inter
-      fonts:
-        - asset: assets/fonts/Inter_24pt-Regular.ttf
-        - asset: assets/fonts/Inter_24pt-Bold.ttf
-          weight: 700
+        - asset: assets/fonts/Gelasio-Italic.ttf
+          style: italic
     - family: Nunito
       fonts:
         - asset: assets/fonts/Nunito-Regular.ttf
         - asset: assets/fonts/Nunito-Bold.ttf
           weight: 700
+        - asset: assets/fonts/Nunito-Italic.ttf
+          style: italic
     - family: Atkinson
       fonts:
         - asset: assets/fonts/AtkinsonHyperlegible-Regular.ttf
         - asset: assets/fonts/AtkinsonHyperlegible-Bold.ttf
           weight: 700
+        - asset: assets/fonts/AtkinsonHyperlegible-Italic.ttf
+          style: italic
     - family: Lexie
       fonts:
         - asset: assets/fonts/LexieReadable-Regular.ttf
         - asset: assets/fonts/LexieReadable-Bold.ttf
           weight: 700
+    - family: Karla
+      fonts:
+        - asset: assets/fonts/Karla-Regular.ttf
+        - asset: assets/fonts/Karla-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Karla-Italic.ttf
+          style: italic
+    - family: Andika
+      fonts:
+        - asset: assets/fonts/Andika-Regular.ttf
+        - asset: assets/fonts/Andika-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Andika-Italic.ttf
+          style: italic
+    - family: CormorantGaramond
+      fonts:
+        - asset: assets/fonts/CormorantGaramond-Regular.ttf
+        - asset: assets/fonts/CormorantGaramond-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/CormorantGaramond-Italic.ttf
+          style: italic
+    - family: Jost
+      fonts:
+        - asset: assets/fonts/Jost-Regular.ttf
+        - asset: assets/fonts/Jost-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Jost-Italic.ttf
+          style: italic
+    - family: Lexend
+      fonts:
+        - asset: assets/fonts/Lexend-Regular.ttf
+        - asset: assets/fonts/Lexend-Bold.ttf
+          weight: 700
+    - family: MarckScript
+      fonts:
+        - asset: assets/fonts/MarckScript-Regular.ttf
+    - family: Urbanist
+      fonts:
+        - asset: assets/fonts/Urbanist-Regular.ttf
+        - asset: assets/fonts/Urbanist-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Urbanist-Italic.ttf
+          style: italic
 
 
 

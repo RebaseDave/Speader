@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'streak_provider.dart';
 import '../../core/services/streak_service.dart';
+import '../../core/theme/app_colors.dart';
+
 
 class StreakBanner extends ConsumerWidget {
   const StreakBanner({super.key});
@@ -25,7 +27,7 @@ class _Banner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = data.goalReachedToday
-        ? const Color(0xFF4CAF50)
+        ? context.colors.success
         : Theme.of(context).colorScheme.primary;
 
     final wordsLeft = kDailyGoalWords - data.todayWords;
@@ -48,7 +50,7 @@ class _Banner extends StatelessWidget {
               Icon(
                 Icons.local_fire_department,
                 color: data.goalReachedToday
-                    ? Colors.orange
+                    ? context.colors.warning
                     : data.isPending
                     ? Colors.white38
                     : Colors.white24,
@@ -59,7 +61,7 @@ class _Banner extends StatelessWidget {
                 '${data.displayStreak}',
                 style: TextStyle(
                   color: data.goalReachedToday
-                      ? Colors.orange
+                      ? context.colors.warning
                       : data.isPending
                       ? Colors.white38
                       : Colors.white38,

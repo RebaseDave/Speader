@@ -4,6 +4,7 @@ import '../../core/database/session_dao.dart';
 import '../../core/services/settings_service.dart';
 import '../../core/services/streak_service.dart';
 import '../../core/models/read_session.dart';
+import '../../core/theme/app_colors.dart';
 
 class StatsSheet extends ConsumerStatefulWidget {
   const StatsSheet({super.key});
@@ -158,7 +159,7 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
     final now = DateTime.now();
     final monday = now.subtract(Duration(days: now.weekday - 1));
     const weekdays = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-    const goal = 5000;
+    const goal = kDailyGoalWords;
 
     final days = List.generate(7, (i) {
       final day = monday.add(Duration(days: i));
@@ -193,7 +194,7 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
                   : (d.words / barMax * 110).clamp(2.0, 110.0);
 
               final barColor = reached
-                  ? const Color(0xFF4CAF50)
+                  ? context.colors.success
                   : isToday
                   ? primary
                   : Colors.white24;
@@ -207,7 +208,7 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
                         _formatK(d.words),
                         style: TextStyle(
                           color: reached
-                              ? const Color(0xFF4CAF50)
+                              ? context.colors.success
                               : Colors.white38,
                           fontSize: 9,
                         ),
@@ -245,7 +246,7 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: const Color(0xFF4CAF50),
+                color: context.colors.success,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -265,11 +266,10 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
   Widget _buildStreakCalendar(Color primary) {
     if (_dailyCounts == null) return const SizedBox();
 
-    final goalDays = <String>{};
-    for (final row in _dailyCounts!) {
-      final words = row['total_words'] as int? ?? 0;
-      if (words >= 5000) goalDays.add(row['day'] as String);
-    }
+    final dayWords = <String, int>{
+      for (final row in _dailyCounts!)
+        row['day'] as String: row['total_words'] as int? ?? 0,
+    };
 
     final now = DateTime.now();
     final isCurrentMonth =
@@ -301,7 +301,7 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
             Icon(
               Icons.local_fire_department,
               color: (_streak?.streakDays ?? 0) > 0
-                  ? Colors.orange
+                  ? context.colors.warning
                   : Colors.white24,
               size: 16,
             ),
@@ -310,7 +310,7 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
               '${_streak?.streakDays ?? 0} Tage',
               style: TextStyle(
                 color: (_streak?.streakDays ?? 0) > 0
-                    ? Colors.orange
+                    ? context.colors.warning
                     : Colors.white38,
                 fontSize: 13,
                 fontWeight: FontWeight.bold,
@@ -365,14 +365,14 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
           ],
         ),
         const SizedBox(height: 8),
-        _buildMonthCalendar(_calendarMonth, goalDays, primary, now),
+        _buildMonthCalendar(_calendarMonth, dayWords, primary, now),
       ],
     );
   }
 
   Widget _buildMonthCalendar(
     DateTime month,
-    Set<String> goalDays,
+    Map<String, int> dayWords,
     Color primary,
     DateTime now,
   ) {
@@ -399,34 +399,45 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
             final date = DateTime(month.year, month.month, day);
             final key =
                 '${date.year}-${date.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
-            final isGoal = goalDays.contains(key);
+            final words = dayWords[key] ?? 0;
             final isToday =
                 date.day == now.day &&
                 date.month == now.month &&
                 date.year == now.year;
             final isFuture = date.isAfter(now);
+            final heat = _heatColor(words);
+            final hasData = words >= kDailyGoalWords;
 
             return Container(
               decoration: BoxDecoration(
-                color: isFuture
-                    ? Colors.transparent
-                    : isGoal
-                    ? const Color(0xFF4CAF50)
-                    : Colors.white12,
+                color: isFuture ? Colors.transparent : heat,
                 borderRadius: BorderRadius.circular(4),
                 border: isToday ? Border.all(color: primary, width: 1.5) : null,
               ),
               child: Center(
-                child: Text(
-                  '$day',
-                  style: TextStyle(
-                    color: isFuture
-                        ? Colors.white12
-                        : isGoal
-                        ? Colors.white
-                        : Colors.white38,
-                    fontSize: 10,
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '$day',
+                      style: TextStyle(
+                        color: isFuture
+                            ? Colors.white12
+                            : hasData
+                            ? Colors.white
+                            : Colors.white38,
+                        fontSize: 10,
+                      ),
+                    ),
+                    if (!isFuture && words > 0)
+                      Text(
+                        _formatK(words),
+                        style: TextStyle(
+                          color: hasData ? Colors.white70 : Colors.white38,
+                          fontSize: 7,
+                        ),
+                      ),
+                  ],
                 ),
               ),
             );
@@ -435,6 +446,16 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
         const SizedBox(height: 12),
       ],
     );
+  }
+
+  /// Heatmap-Farbe: unter Tagesziel = neutrales Grau (kein Grün verdient).
+  /// Ab Ziel wird's grün, bis 500% Ziel zusätzlich dunkler/satter.
+  Color _heatColor(int words) {
+    if (words < kDailyGoalWords) return Colors.white12;
+    final goalColor = context.colors.success;
+    final overColor = context.colors.successDark;
+    final overRatio = (((words / kDailyGoalWords) - 1.0) / 4.0).clamp(0.0, 1.0);
+    return Color.lerp(goalColor, overColor, overRatio)!;
   }
 
   // ── WPM VERLAUF ───────────────────────────────────────────────────────────
@@ -473,7 +494,7 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
     final range = (maxWpm - minWpm).toDouble();
     final midWpm = ((maxWpm + minWpm) / 2).round();
 
-    const paraColor = Color(0xFF4CAF50);
+    final paraColor = context.colors.success;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -733,8 +754,9 @@ class _StatsSheetState extends ConsumerState<StatsSheet> {
                   painter: _LinePainter(
                     points: points,
                     color: primary,
-                    goalLine: 5000,
+                    goalLine: kDailyGoalWords,
                     maxValue: maxWords.toDouble(),
+                    goalColor: context.colors.success,
                   ),
                   size: Size.infinite,
                 ),
@@ -844,12 +866,14 @@ class _LinePainter extends CustomPainter {
   final Color color;
   final int goalLine;
   final double maxValue;
+  final Color goalColor;
 
   _LinePainter({
     required this.points,
     required this.color,
     required this.goalLine,
     required this.maxValue,
+    required this.goalColor,
   });
 
   @override
@@ -862,7 +886,7 @@ class _LinePainter extends CustomPainter {
 
     // Ziel-Linie gestrichelt
     final goalPaint = Paint()
-      ..color = const Color(0xFF4CAF50).withValues(alpha: 0.4)
+      ..color = goalColor.withValues(alpha: 0.4)
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 

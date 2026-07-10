@@ -1,12 +1,16 @@
 import 'package:epubx/epubx.dart';
+import 'package:archive/archive.dart';
 import 'dart:io';
+import 'dart:convert';
 
 class ParsedBook {
   final String title;
+  final String? author;
   final List<ParsedChapter> chapters;
   final Map<String, List<int>> images;
   ParsedBook({
     required this.title,
+    this.author,
     required this.chapters,
     required this.images,
   });
@@ -27,9 +31,20 @@ class ParsedChapter {
 class EpubParser {
   Future<ParsedBook> parse(String filePath) async {
     final bytes = await File(filePath).readAsBytes();
-    final epub = await EpubReader.readBook(bytes);
+
+    // Klassenbasierte Kursivierung ermitteln – unabhängig davon, ob epubx
+    // das Buch überhaupt einlesen kann.
+    final italicClassNames = _collectItalicClassNames(bytes);
+
+    EpubBook epub;
+    try {
+      epub = await EpubReader.readBook(bytes);
+    } catch (_) {
+      return await _parseFallback(filePath, bytes, italicClassNames);
+    }
 
     final title = epub.Title ?? 'Unbekannter Titel';
+    final author = epub.Author?.isNotEmpty == true ? epub.Author : null;
     final chapters = <ParsedChapter>[];
     int chapterIndex = 0;
 
@@ -56,7 +71,7 @@ class EpubParser {
         final hash = content.hashCode;
         if (!seenContentHashes.contains(hash)) {
           seenContentHashes.add(hash);
-          final parsed = _parseChapter(chapter, chapterIndex, validImageNames);
+          final parsed = _parseChapter(chapter, chapterIndex, validImageNames, italicClassNames);
           if (parsed != null) {
             chapters.add(parsed);
             chapterIndex++;
@@ -130,7 +145,7 @@ class EpubParser {
           // Fußnoten-Files überspringen
           if (_isFootnoteFile(content)) continue;
 
-          final text = _htmlToText(content, validImageNames);
+          final text = _htmlToText(content, validImageNames, italicClassNames);
           final tokens = _tokenize(text);
           if (tokens.length < 10) continue;
 
@@ -160,10 +175,10 @@ class EpubParser {
       }
     }
 
-    return ParsedBook(title: title, chapters: chapters, images: images);
+    return ParsedBook(title: title, author: author, chapters: chapters, images: images);
   }
 
-  ParsedChapter? _parseChapter(EpubChapter chapter, int index, Set<String> validImageNames) {
+  ParsedChapter? _parseChapter(EpubChapter chapter, int index, Set<String> validImageNames, Set<String> italicClassNames) {
     final content = chapter.HtmlContent;
     if (content == null || content.trim().isEmpty) return null;
 
@@ -176,7 +191,7 @@ class EpubParser {
       tokens.add('__CHAPTER__:$chapterTitle');
     }
 
-    final text = _htmlToText(content, validImageNames);
+    final text = _htmlToText(content, validImageNames, italicClassNames);
     final contentTokens = _tokenize(text);
 
     if (contentTokens.isEmpty) return null;
@@ -274,7 +289,39 @@ class EpubParser {
     return tokens.length < 50;
   }
 
-  String _htmlToText(String html, [Set<String>? validImageNames]) {
+  /// Sammelt alle CSS-Klassennamen aus dem EPUB, deren Regel
+  /// `font-style: italic` (oder `oblique`) setzt. Manche EPUBs (z.B. aus
+  /// Calibre-Konvertierungen) nutzen dafür Klassen statt <i>/<em>-Tags.
+  Set<String> _collectItalicClassNames(List<int> bytes) {
+    final classNames = <String>{};
+    try {
+      final archive = ZipDecoder().decodeBytes(bytes);
+      for (final file in archive) {
+        if (!file.isFile) continue;
+        if (!file.name.toLowerCase().endsWith('.css')) continue;
+        final css = utf8.decode(file.content as List<int>, allowMalformed: true);
+        classNames.addAll(_extractItalicClassNames(css));
+      }
+    } catch (_) {
+      // CSS nicht lesbar? Kein Beinbruch – <i>/<em>-Tags funktionieren weiterhin.
+    }
+    return classNames;
+  }
+
+  Set<String> _extractItalicClassNames(String css) {
+    final result = <String>{};
+    final ruleRegex = RegExp(r'\.([a-zA-Z0-9_-]+)\s*\{([^}]*)\}', dotAll: true);
+    for (final match in ruleRegex.allMatches(css)) {
+      final body = match.group(2) ?? '';
+      if (RegExp(r'font-style\s*:\s*(italic|oblique)', caseSensitive: false)
+          .hasMatch(body)) {
+        result.add(match.group(1)!);
+      }
+    }
+    return result;
+  }
+
+  String _htmlToText(String html, [Set<String>? validImageNames, Set<String>? italicClassNames]) {
     var text = html;
 
     // XML-Deklarationen entfernen
@@ -344,6 +391,33 @@ class EpubParser {
         if (validImageNames != null && !validImageNames.contains(fileName)) return '';
         return ' __IMAGE__:$fileName ';
       },
+    );
+
+    // Klassenbasierte Kursivierung (z.B. <span class="class_4843">) als
+    // Marker erhalten, bevor der große Kehraus kommt.
+    if (italicClassNames != null && italicClassNames.isNotEmpty) {
+      for (final cls in italicClassNames) {
+        for (final tag in ['span', 'p', 'div']) {
+          text = text.replaceAllMapped(
+            RegExp(
+              '<$tag\\s+class="[^"]*\\b$cls\\b[^"]*"[^>]*>(.*?)</$tag>',
+              caseSensitive: false,
+              dotAll: true,
+            ),
+            (m) => ' __ITALIC_START__ ${m.group(1)} __ITALIC_END__ ',
+          );
+        }
+      }
+    }
+
+    // Kursiv-Tags als Marker erhalten, bevor der große Kehraus kommt
+    text = text.replaceAll(
+      RegExp(r'<(em|i)\b[^>]*>', caseSensitive: false),
+      ' __ITALIC_START__ ',
+    );
+    text = text.replaceAll(
+      RegExp(r'</(em|i)>', caseSensitive: false),
+      ' __ITALIC_END__ ',
     );
 
     // Alle anderen HTML-Tags entfernen
@@ -477,6 +551,118 @@ class EpubParser {
     }
     return images;
   }
+
+  Future<ParsedBook> _parseFallback(
+    String filePath,
+    List<int> bytes,
+    Set<String> italicClassNames,
+  ) async {
+    // Öffne EPUB manuell als ZIP und lese nur existierende HTML-Dateien
+    final archive = ZipDecoder().decodeBytes(bytes);
+
+    // Dateien nach Name indexieren
+    final fileMap = <String, ArchiveFile>{};
+    for (final file in archive) {
+      if (file.isFile) fileMap[file.name] = file;
+    }
+
+    // OPF-Datei finden
+    String? opfPath;
+    final containerFile = fileMap['META-INF/container.xml'];
+    if (containerFile != null) {
+      final containerXml = utf8.decode(containerFile.content as List<int>);
+      final match = RegExp(r'full-path="([^"]+\.opf)"').firstMatch(containerXml);
+      opfPath = match?.group(1);
+    }
+    opfPath ??= fileMap.keys.firstWhere(
+      (k) => k.endsWith('.opf'),
+      orElse: () => '',
+    );
+    if (opfPath.isEmpty) {
+      return ParsedBook(title: _titleFromPath(filePath), chapters: [], images: {});
+    }
+
+    final opfFile = fileMap[opfPath];
+    if (opfFile == null) {
+      return ParsedBook(title: _titleFromPath(filePath), chapters: [], images: {});
+    }
+
+    final opfXml = utf8.decode(opfFile.content as List<int>);
+    final opfDir = opfPath.contains('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+
+    // Titel aus OPF
+    final titleMatch = RegExp(r'<dc:title[^>]*>([^<]+)</dc:title>', caseSensitive: false).firstMatch(opfXml);
+    final title = _decodeXmlEntities(titleMatch?.group(1)?.trim() ?? _titleFromPath(filePath));
+    
+    // Autor aus OPF
+    final authorMatch = RegExp(r'<dc:creator[^>]*>([^<]+)</dc:creator>', caseSensitive: false).firstMatch(opfXml);
+    final author = _decodeXmlEntities(authorMatch?.group(1)?.trim() ?? '').isEmpty 
+        ? null : _decodeXmlEntities(authorMatch?.group(1)?.trim() ?? '');
+
+    // Spine-Reihenfolge aus OPF
+    final manifestItems = <String, String>{};
+    for (final m in RegExp(r'<item\s[^>]*id="([^"]+)"[^>]*href="([^"]+)"', caseSensitive: false).allMatches(opfXml)) {
+      manifestItems[m.group(1)!] = m.group(2)!;
+    }
+
+    final spineRefs = <String>[];
+    for (final m in RegExp(r'<itemref\s[^>]*idref="([^"]+)"', caseSensitive: false).allMatches(opfXml)) {
+      final href = manifestItems[m.group(1)!];
+      if (href != null) spineRefs.add(href);
+    }
+
+    // HTML-Dateien in Spine-Reihenfolge lesen (nur existierende)
+    final chapters = <ParsedChapter>[];
+    int chapterIndex = 0;
+    final seenHashes = <int>{};
+
+    for (final href in spineRefs) {
+      final fullPath = opfDir + href;
+      final normalizedPath = fullPath.replaceAll('../', '');
+      ArchiveFile? file = fileMap[fullPath] ?? fileMap[normalizedPath];
+      if (file == null) {
+        final filename = href.split('/').last;
+        for (final entry in fileMap.entries) {
+          if (entry.key.endsWith(filename)) {
+            file = entry.value;
+            break;
+          }
+        }
+      }
+      if (file == null) continue; // Fehlende Datei überspringen statt crashen
+
+      final content = utf8.decode(file.content as List<int>, allowMalformed: true);
+      final hash = content.hashCode;
+      if (seenHashes.contains(hash)) continue;
+      seenHashes.add(hash);
+
+      if (_isFootnoteFile(content)) continue;
+
+      final text = _htmlToText(content, null, italicClassNames);
+      final tokens = _tokenize(text);
+      if (tokens.length < 10) continue;
+
+      chapters.add(ParsedChapter(
+        title: null,
+        indexInBook: chapterIndex,
+        rawTokens: tokens,
+      ));
+      chapterIndex++;
+    }
+
+    return ParsedBook(title: title, author: author, chapters: chapters, images: {});
+  }
+
+  String _titleFromPath(String path) =>
+      path.split('/').last.replaceAll('.epub', '');
+
+  String _decodeXmlEntities(String text) => text
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&apos;', "'")
+      .replaceAll('&#38;', '&');
 
   List<String> _tokenize(String text) {
     final tokens = <String>[];

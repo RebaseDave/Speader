@@ -8,6 +8,7 @@ class WordToken {
   final bool isDashEnd;
   final bool isChapterTitle;
   final int chapterIndex;
+  final bool isItalic;
 
   const WordToken({
     required this.raw,
@@ -19,14 +20,20 @@ class WordToken {
     required this.isDashEnd,
     required this.isChapterTitle,
     required this.chapterIndex,
+    this.isItalic = false,
   });
 
   bool get isImage => raw.startsWith('__IMAGE__:');
   String get imageKey => isImage ? raw.substring('__IMAGE__:'.length) : '';
 
+  /// Markiert einen leeren Absatz (doppelter Zeilenumbruch) im Original –
+  /// wird im Paragraph-Modus als eigene "Szenenwechsel"-Seite angezeigt.
+  bool get isSceneBreak => raw == '__SCENE_BREAK__';
+
   bool get isCountable =>
       !isChapterTitle &&
       !isImage &&
+      !isSceneBreak &&
       normalized.isNotEmpty &&
       !RegExp(r'^[–—«»?!.,;…\s]+$').hasMatch(normalized);
 

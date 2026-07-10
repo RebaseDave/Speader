@@ -57,6 +57,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
   static const _volumeChannel = MethodChannel(
     'com.example.rsvp_reader/volume_keys',
   );
+  final _paragraphReaderKey = GlobalKey<ParagraphReaderState>();
 
   @override
   void initState() {
@@ -76,10 +77,15 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
 
     _volumeChannel.setMethodCallHandler((call) async {
       if (SettingsService.instance.paragraphMode) {
+        final paragraphState = _paragraphReaderKey.currentState;
+        if (paragraphState == null) return;
+
+        // Lauter = Pause (Overlay zeigen), Leiser = Play (Overlay ausblenden).
+        // Gilt gleichermaßen für Absatz- und Satzmodus.
         if (call.method == 'volumeUp') {
-          ref.read(readerProvider.notifier).nextParagraph();
+          paragraphState.showOverlay();
         } else if (call.method == 'volumeDown') {
-          ref.read(readerProvider.notifier).prevParagraph();
+          paragraphState.hideOverlay();
         }
       } else {
         if (call.method == 'volumeUp') {
@@ -316,7 +322,7 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen>
     }
 
     if (settingsState.paragraphMode) {
-      return ParagraphReader(book: widget.book);
+      return ParagraphReader(key: _paragraphReaderKey, book: widget.book);
     }
 
     return PopScope(

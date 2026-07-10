@@ -32,21 +32,29 @@ class SettingsService {
   static const double defaultOrpDotSpacing = 25;
   static const String defaultFontFamily = 'Literata';
   static const List<String> allFonts = [
-  'EBGaramond',
+  // Klassische Serifs
+  'CormorantGaramond',
   'Literata',
   'CrimsonPro',
   'Gelasio',
   'PlayfairDisplay',
   'Spectral',
-  'Fraunces',
+  // Slab
   'Bitter',
   'RobotoSlab',
   'ZillaSlab',
   'JosefinSlab',
-  'Inter',
+  // Sans
   'Nunito',
   'Atkinson',
   'Lexie',
+  'Jost',
+  'Lexend',
+  'Urbanist',
+  'Karla',
+  'Andika',
+  // Handschrift
+  'MarckScript',
 ];
   static const List<String> defaultSelectedFonts = [
     'Literata',
@@ -114,6 +122,37 @@ class SettingsService {
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+  }
+
+  /// Alle Settings dieser App-Version (Präfix p1_) als generische Map,
+  /// fürs Backup. JSON-kompatible Typen (String/int/double/bool/List<String>).
+  Map<String, dynamic> exportRaw() {
+    final result = <String, dynamic>{};
+    for (final key in _prefs.getKeys()) {
+      if (!key.startsWith(_p)) continue;
+      result[key] = _prefs.get(key);
+    }
+    return result;
+  }
+
+  /// Kehrseite von [exportRaw] — schreibt die Werte direkt zurück in
+  /// SharedPreferences (überschreibt bestehende Werte, klassisches Restore).
+  Future<void> importRaw(Map<String, dynamic> data) async {
+    for (final entry in data.entries) {
+      final value = entry.value;
+      if (value is String) {
+        await _prefs.setString(entry.key, value);
+      } else if (value is int) {
+        await _prefs.setInt(entry.key, value);
+      } else if (value is double) {
+        await _prefs.setDouble(entry.key, value);
+      } else if (value is bool) {
+        await _prefs.setBool(entry.key, value);
+      } else if (value is List) {
+        await _prefs.setStringList(
+            entry.key, value.map((e) => e.toString()).toList());
+      }
+    }
   }
 
   String get activeColorProfile =>
@@ -409,5 +448,12 @@ class SettingsService {
       _prefs.getBool('${_p}sentence_focus_enabled') ?? defaultSentenceFocusEnabled;
   Future<void> setSentenceFocusEnabled(bool value) async {
     await _prefs.setBool('${_p}sentence_focus_enabled', value);
+  }
+
+  static const bool defaultParagraphAutoScroll = false;
+  bool get paragraphAutoScroll =>
+      _prefs.getBool('${_p}paragraph_auto_scroll') ?? defaultParagraphAutoScroll;
+  Future<void> setParagraphAutoScroll(bool value) async {
+    await _prefs.setBool('${_p}paragraph_auto_scroll', value);
   }
 }

@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import '../models/read_session.dart';
+import '../services/streak_service.dart';
 import 'database_helper.dart';
 
 class SessionDao {
@@ -50,6 +51,35 @@ class SessionDao {
     }
 
     await db.insert('read_sessions', session.toMap());
+  }
+
+  /// Fügt eine Session unverändert ein, ohne die Merge-Logik von
+  /// [insertSession] — für Backup-Restore historischer Daten.
+  Future<void> insertSessionRaw(ReadSession session) async {
+    final db = await _db;
+    await db.insert('read_sessions', session.toMap());
+  }
+
+  /// Prüft, ob exakt diese Session schon existiert (Dedupe beim Restore).
+  Future<bool> sessionExists(
+    int bookId,
+    DateTime startedAt,
+    int durationSec,
+    int wordsRead,
+  ) async {
+    final db = await _db;
+    final maps = await db.query(
+      'read_sessions',
+      where: 'book_id = ? AND started_at = ? AND duration_sec = ? AND words_read = ?',
+      whereArgs: [
+        bookId,
+        startedAt.toIso8601String(),
+        durationSec,
+        wordsRead,
+      ],
+      limit: 1,
+    );
+    return maps.isNotEmpty;
   }
 
   Future<List<ReadSession>> getSessionsByBookId(int bookId) async {
@@ -224,7 +254,7 @@ class SessionDao {
 
     final goalDays = <String>{};
     for (final row in maps) {
-      if ((row['total_words'] as int? ?? 0) >= 5000) {
+      if ((row['total_words'] as int? ?? 0) >= kDailyGoalWords) {
         goalDays.add(row['day'] as String);
       }
     }

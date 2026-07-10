@@ -10,8 +10,10 @@ import '../reader/rsvp_display.dart';
 import 'settings_provider.dart';
 import '../../core/database/orp_dao.dart';
 import '../../core/database/token_cache_dao.dart';
+import '../../core/database/backup_service.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/theme/app_colors.dart';
 
 const _previewText =
     'Der Mann mit dem Mikrofon\n\n'
@@ -241,7 +243,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             bottom: 0,
             left: 0,
             right: 0,
-            height: screenHeight * 0.45,
+            height: screenHeight * 0.35,
             child: Column(
               children: [
                 // Page Dots
@@ -522,6 +524,12 @@ class _PausenPanel extends ConsumerWidget {
         const _ResetColorsRow(),
         const SizedBox(height: 16),
         const _ResetOrpDbRow(),
+        const SizedBox(height: 24),
+        const Divider(color: Colors.white12),
+        const SizedBox(height: 8),
+        const _BackupExportRow(),
+        const SizedBox(height: 16),
+        const _BackupImportRow(),
         const SizedBox(height: 8),
       ],
     );
@@ -783,7 +791,10 @@ class _FontsPanelState extends ConsumerState<_FontsPanel> {
     final service = SettingsService.instance;
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: EdgeInsets.only(
+        top: 4,
+        bottom: 4 + MediaQuery.of(context).padding.bottom,
+      ),
       itemCount: SettingsService.allFonts.length,
       itemBuilder: (context, i) {
         final font = SettingsService.allFonts[i];
@@ -992,6 +1003,7 @@ class _SwitchRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -1002,10 +1014,36 @@ class _SwitchRow extends StatelessWidget {
               style: const TextStyle(color: Colors.white70, fontSize: 13),
             ),
           ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: Theme.of(context).colorScheme.primary,
+          // Reiner Tap-Button statt Switch: Switch hat einen eingebauten
+          // Drag-Erkenner, der mit dem horizontalen Wisch-Wechsel des
+          // umgebenden PageView kollidiert. Ein simpler Tap-Only-Button
+          // konkurriert nicht mit der Wisch-Geste.
+          GestureDetector(
+            onTap: () => onChanged(!value),
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 68,
+              height: 32,
+              decoration: BoxDecoration(
+                color: value ? primary.withValues(alpha: 0.2) : Colors.white12,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: value ? primary : Colors.white24,
+                  width: 1.5,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  value ? 'An' : 'Aus',
+                  style: TextStyle(
+                    color: value ? primary : Colors.white54,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -1060,7 +1098,7 @@ class _ApiKeyRowState extends State<_ApiKeyRow> {
               child: Text(
                 hasKey ? '••••••••' : 'Nicht gesetzt',
                 style: TextStyle(
-                  color: hasKey ? Colors.white54 : Colors.red.shade300,
+                  color: hasKey ? Colors.white54 : context.colors.danger,
                   fontSize: 12,
                 ),
               ),
@@ -1141,7 +1179,7 @@ void _showRenameDialog(
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
-      backgroundColor: const Color(0xFF1A1A2E),
+      backgroundColor: context.colors.surfaceElevated,
       title: const Text(
         'Profil umbenennen',
         style: TextStyle(color: Colors.white),
@@ -1189,7 +1227,7 @@ class _ResetColorsRow extends ConsumerWidget {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A2E),
+            backgroundColor: context.colors.surfaceElevated,
             title: const Text(
               'Farben zurücksetzen',
               style: TextStyle(color: Colors.white),
@@ -1205,9 +1243,9 @@ class _ResetColorsRow extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
+                child: Text(
                   'Zurücksetzen',
-                  style: TextStyle(color: Colors.redAccent),
+                  style: TextStyle(color: context.colors.danger),
                 ),
               ),
             ],
@@ -1245,7 +1283,7 @@ class _ResetOrpDbRow extends ConsumerWidget {
         final confirmed = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF1A1A2E),
+            backgroundColor: context.colors.surfaceElevated,
             title: const Text(
               'ORP-Datenbank zurücksetzen',
               style: TextStyle(color: Colors.white),
@@ -1262,9 +1300,9 @@ class _ResetOrpDbRow extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
+                child: Text(
                   'Zurücksetzen',
-                  style: TextStyle(color: Colors.redAccent),
+                  style: TextStyle(color: context.colors.danger),
                 ),
               ),
             ],
@@ -1285,6 +1323,137 @@ class _ResetOrpDbRow extends ConsumerWidget {
               'ORP-Datenbank zurücksetzen',
               style: TextStyle(color: Colors.white38, fontSize: 14),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+class _BackupExportRow extends ConsumerStatefulWidget {
+  const _BackupExportRow();
+
+  @override
+  ConsumerState<_BackupExportRow> createState() => _BackupExportRowState();
+}
+
+class _BackupExportRowState extends ConsumerState<_BackupExportRow> {
+  bool _running = false;
+
+  Future<void> _export() async {
+    setState(() => _running = true);
+    try {
+      await BackupService().exportBackup();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Backup fehlgeschlagen: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _running ? null : _export,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            const Icon(Icons.upload_outlined, size: 18, color: Colors.white38),
+            const SizedBox(width: 10),
+            const Text(
+              'Backup exportieren',
+              style: TextStyle(color: Colors.white38, fontSize: 14),
+            ),
+            const Spacer(),
+            if (_running)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BackupImportRow extends ConsumerStatefulWidget {
+  const _BackupImportRow();
+
+  @override
+  ConsumerState<_BackupImportRow> createState() => _BackupImportRowState();
+}
+
+class _BackupImportRowState extends ConsumerState<_BackupImportRow> {
+  bool _running = false;
+
+  Future<void> _import() async {
+    setState(() => _running = true);
+    try {
+      final result = await BackupService().importBackup();
+      if (!mounted) return;
+      if (result == null) return; // Abgebrochen
+      final message = result.errors.isEmpty
+          ? '${result.sessionsImported} Lesesitzungen wiederhergestellt, '
+              '${result.phantomBooksCreated} Bücher als Statistik-Platzhalter angelegt, '
+              '${result.companionsMerged} Begleiter aktualisiert, '
+              '${result.abbreviationsMerged} neue Abkürzungen übernommen.'
+          : '${result.errors.length} Fehler:\n${result.errors.join('\n')}';
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: context.colors.surfaceElevated,
+          title: const Text('Backup wiederhergestellt',
+              style: TextStyle(color: Colors.white)),
+          content: Text(message,
+              style: const TextStyle(color: Colors.white54, fontSize: 13)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import fehlgeschlagen: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _running ? null : _import,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            const Icon(Icons.download_outlined,
+                size: 18, color: Colors.white38),
+            const SizedBox(width: 10),
+            const Text(
+              'Backup importieren',
+              style: TextStyle(color: Colors.white38, fontSize: 14),
+            ),
+            const Spacer(),
+            if (_running)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
           ],
         ),
       ),

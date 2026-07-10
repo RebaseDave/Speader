@@ -18,18 +18,27 @@ import 'goal_celebration_overlay.dart';
 import '../../core/models/book.dart';
 import '../companions/companion_levelup_overlay.dart';
 import '../companions/companion_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 class ParagraphReader extends ConsumerStatefulWidget {
   final Book book;
   const ParagraphReader({super.key, required this.book});
 
   @override
-  ConsumerState<ParagraphReader> createState() => _ParagraphReaderState();
+  ConsumerState<ParagraphReader> createState() => ParagraphReaderState();
 }
 
-class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
+class ParagraphReaderState extends ConsumerState<ParagraphReader> {
   ParagraphData? _data;
   bool _overlayVisible = true;
+
+  /// "Aktiv am Lesen" = Overlay geschlossen (analog zur Zeit-/Wortzählung).
+  bool get isActive => !_overlayVisible;
+
+  void nextSentence() => _nextSentence();
+  void prevSentence() => _prevSentence();
+  void showOverlay() => _showOverlay();
+  void hideOverlay() => _hideOverlay();
 
   // Lesezeit-Tracking
   DateTime? _sessionStart;
@@ -54,14 +63,16 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   int _levelUpSlot = 0;
   int _levelUpLevel = 0;
 
-  double? _dragStartY;
   int _activeSentenceIndex = 0;
   bool _pendingLastSentence = false;
   Timer? _autoTimer;
 
+  // Scroll
+  final ScrollController _scrollController = ScrollController();
+  List<GlobalKey> _sentenceKeys = [];
+
   // Tap-Timing Tracking
   final List<(int words, double secs)> _tapSamples = [];
-  int _trackedWords = 0;
   DateTime? _lastTapTime;
 
   @override
@@ -80,6 +91,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   void dispose() {
     _autoTimer?.cancel();
     ref.read(paragraphAutoModeProvider.notifier).state = false;
+    _scrollController.dispose();
     _clockTimer?.cancel();
     _brightnessIndicatorTimer?.cancel();
     ScreenBrightness.instance.resetScreenBrightness();
@@ -123,6 +135,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   void _refresh() {
     if (!mounted) return;
     final newData = ref.read(readerProvider.notifier).currentParagraph();
+    _sentenceKeys = List.generate(newData.sentences.length, (_) => GlobalKey());
     setState(() {
       _data = newData;
       if (_pendingLastSentence) {
@@ -132,14 +145,44 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
         _activeSentenceIndex = 0;
       }
     });
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
+  void _maybeAutoScroll() {
+    if (!SettingsService.instance.paragraphAutoScroll) return;
+    if (!_scrollController.hasClients) return;
+    if (_scrollController.position.maxScrollExtent <= 0) return;
+
+    final keyIndex = _activeSentenceIndex.clamp(0, _sentenceKeys.length - 1);
+    if (keyIndex >= _sentenceKeys.length) return;
+    final ctx = _sentenceKeys[keyIndex].currentContext;
+    if (ctx == null) return;
+
+    final renderBox = ctx.findRenderObject() as RenderBox?;
+    if (renderBox == null || !renderBox.hasSize) return;
+
+    final screenHeight = MediaQuery.of(context).size.height;
+    final positionY = renderBox.localToGlobal(Offset.zero).dy;
+
+    if (positionY > screenHeight * 0.6) {
+      Scrollable.ensureVisible(
+        ctx,
+        alignment: 0.35,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _activateAuto() {
-    if (_trackedWords < 300) {
+    if (_tapSamples.length < 40) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Mindestens 300 getippte Wörter notwendig. Aktuell: $_trackedWords'),
+            'Mindestens 40 Sätze notwendig. Aktuell: ${_tapSamples.length}',
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -153,6 +196,54 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
     _autoTimer?.cancel();
     ref.read(paragraphAutoModeProvider.notifier).state = false;
     _lastTapTime = null;
+  }
+
+  List<TextSpan> _buildParagraphSpans() {
+    final data = _data!;
+    final spans = <TextSpan>[];
+
+    void addFragments(
+      List<ParagraphFragment> frags, {
+      String prefixSpace = '',
+      String suffixSpace = '',
+    }) {
+      for (int i = 0; i < frags.length; i++) {
+        var text = frags[i].text;
+        if (i == 0 && prefixSpace.isNotEmpty) text = '$prefixSpace$text';
+        if (i == frags.length - 1) text = '$text$suffixSpace';
+        spans.add(
+          TextSpan(
+            text: text,
+            style: frags[i].isItalic
+                ? const TextStyle(fontStyle: FontStyle.italic)
+                : null,
+          ),
+        );
+      }
+    }
+
+    if (data.pre.isNotEmpty) {
+      addFragments(
+        data.preFragments,
+        suffixSpace: data.pre.endsWith('-') ? '' : ' ',
+      );
+    }
+    spans.add(
+      TextSpan(
+        text: data.current,
+        style: data.currentIsItalic
+            ? const TextStyle(fontStyle: FontStyle.italic)
+            : null,
+      ),
+    );
+    if (data.post.isNotEmpty) {
+      addFragments(
+        data.postFragments,
+        prefixSpace: data.current.endsWith('-') ? '' : ' ',
+      );
+    }
+
+    return spans;
   }
 
   void _scheduleAutoNext() {
@@ -169,24 +260,18 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
     final current = _activeSentenceIndex < sentences.length
         ? sentences[_activeSentenceIndex]
         : '';
-    final wordCount =
-        current.split(' ').where((w) => w.isNotEmpty).length.clamp(1, 999);
-    final isLast = _activeSentenceIndex >= sentences.length - 1;
+    final wordCount = current
+        .split(' ')
+        .where((w) => w.isNotEmpty)
+        .length
+        .clamp(1, 999);
 
     double secs = _calcSecsForWords(wordCount);
-    if (isLast) secs += 1.0;
 
     _autoTimer = Timer(Duration(milliseconds: (secs * 1000).round()), () {
       if (!mounted || !ref.read(paragraphAutoModeProvider)) return;
-      _nextSentence();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !ref.read(paragraphAutoModeProvider)) return;
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && ref.read(paragraphAutoModeProvider)) {
-            _scheduleAutoNext();
-          }
-        });
-      });
+      _nextSentence(recordSample: false);
+      _scheduleAutoNext();
     });
   }
 
@@ -194,7 +279,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
     final now = DateTime.now();
     if (_lastTapTime != null && _data != null) {
       final elapsed = now.difference(_lastTapTime!).inMilliseconds / 1000.0;
-      if (elapsed > 0.1 && elapsed < 30.0) {
+      if (elapsed < 30.0) {
         final sentences = _data!.sentences;
         if (_activeSentenceIndex < sentences.length) {
           final wordCount = sentences[_activeSentenceIndex]
@@ -203,7 +288,6 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
               .length;
           if (wordCount > 0) {
             _tapSamples.add((wordCount, elapsed));
-            _trackedWords += wordCount;
           }
         }
       }
@@ -214,54 +298,48 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
   double _calcSecsForWords(int wordCount) {
     if (_tapSamples.isEmpty) return wordCount / 3.0;
 
-    // Globaler WPS als Fallback
-    final totalWords = _tapSamples.fold<int>(0, (s, e) => s + e.$1);
-    final totalSecs = _tapSamples.fold<double>(0, (s, e) => s + e.$2);
-    final globalWps = totalWords / totalSecs;
-
     // Nachbarn: Samples mit wordCount im Bereich [wordCount-2, wordCount+2]
     final neighbors = _tapSamples
-        .where((s) => (s.$1 - wordCount).abs() <= 2)
+        .where((s) => (s.$1 - wordCount).abs() <= 4)
         .toList();
 
-    if (neighbors.length >= 3) {
-      final avgSecs = neighbors.fold<double>(0, (s, e) => s + e.$2) /
-          neighbors.length;
-      // Skalieren auf tatsächliche Wortanzahl
-      final avgWords = neighbors.fold<double>(0, (s, e) => s + e.$1) /
-          neighbors.length;
-      return avgSecs * (wordCount / avgWords);
+    if (neighbors.length >= 5) {
+      // Median statt Durchschnitt um Ausreißer zu reduzieren
+      final sorted = neighbors.map((e) => e.$2).toList()..sort();
+      return sorted[sorted.length ~/ 2];
     }
 
-    // Interpolation: nächster kleinerer und größerer Cluster
-    final smaller = _tapSamples
-        .where((s) => s.$1 < wordCount)
-        .toList()
+    // Lineare Interpolation zwischen nächstem kleineren + größeren Datenpunkt
+    final smaller = _tapSamples.where((s) => s.$1 < wordCount).toList()
       ..sort((a, b) => b.$1.compareTo(a.$1));
-    final larger = _tapSamples
-        .where((s) => s.$1 > wordCount)
-        .toList()
+    final larger = _tapSamples.where((s) => s.$1 > wordCount).toList()
       ..sort((a, b) => a.$1.compareTo(b.$1));
 
     if (smaller.isNotEmpty && larger.isNotEmpty) {
-      final wpsSmall = smaller.first.$1 / smaller.first.$2;
-      final wpsLarge = larger.first.$1 / larger.first.$2;
-      final interpolatedWps = (wpsSmall + wpsLarge) / 2;
-      return wordCount / interpolatedWps;
+      final s = smaller.first;
+      final l = larger.first;
+      final t = (wordCount - s.$1) / (l.$1 - s.$1);
+      return s.$2 + t * (l.$2 - s.$2);
     }
 
-    return wordCount / globalWps;
+    if (smaller.isNotEmpty) return smaller.first.$2;
+    if (larger.isNotEmpty) return larger.first.$2;
+
+    final totalWords = _tapSamples.fold<int>(0, (sum, e) => sum + e.$1);
+    final totalSecs = _tapSamples.fold<double>(0, (sum, e) => sum + e.$2);
+    return wordCount / (totalWords / totalSecs);
   }
 
-  void _nextSentence() {
+  void _nextSentence({bool recordSample = true}) {
     final sentences = _data?.sentences ?? [];
     if (sentences.isEmpty) {
       ref.read(readerProvider.notifier).nextParagraph();
       return;
     }
-    _recordTapSample();
+    if (recordSample) _recordTapSample();
     if (_activeSentenceIndex < sentences.length - 1) {
       setState(() => _activeSentenceIndex++);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeAutoScroll());
     } else {
       ref.read(readerProvider.notifier).nextParagraph();
     }
@@ -293,8 +371,12 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
           .inSeconds;
       _readingStart = null;
     }
+    _deactivateAuto();
     _lastTapTime = null;
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.manual, overlays: SystemUiOverlay.values);
+    SystemChrome.setEnabledSystemUIMode(
+      SystemUiMode.manual,
+      overlays: SystemUiOverlay.values,
+    );
     setState(() => _overlayVisible = true);
     await _saveSession();
     await _checkGoal();
@@ -337,7 +419,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundColor: context.colors.surfaceElevated,
         title: const Text('Wörterbuch', style: TextStyle(color: Colors.white)),
         content: TextField(
           controller: controller,
@@ -508,22 +590,6 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
               _deactivateAuto();
             }
           },
-          onVerticalDragStart: (details) {
-            _dragStartY = details.globalPosition.dy;
-          },
-          onVerticalDragEnd: (details) {
-            final v = details.primaryVelocity ?? 0;
-            final screenHeight = MediaQuery.of(context).size.height;
-            final startedInBottomZone =
-                (_dragStartY ?? 0) >= screenHeight - 160;
-
-            if (v < -300 && startedInBottomZone) {
-              _showOverlay();
-            } else if (v > 300) {
-              _hideOverlay();
-            }
-            _dragStartY = null;
-          },
           onLongPressStart: _overlayVisible ? null : _onLongPressStart,
           onLongPressMoveUpdate: _overlayVisible
               ? null
@@ -536,6 +602,7 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
               Positioned.fill(
                 child: LayoutBuilder(
                   builder: (context, constraints) => SingleChildScrollView(
+                    controller: _scrollController,
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
                         minHeight: constraints.maxHeight,
@@ -572,57 +639,88 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
                                     size: 64,
                                   ),
                                 )
+                              : _data!.isSceneBreakPage
+                              ? Text(
+                                  '⁂',
+                                  style: TextStyle(
+                                    fontSize: s.paragraphFontSize * 1.6,
+                                    color: context.colors.accent,
+                                  ),
+                                )
                               : settings.sentenceFocusEnabled &&
-                                      _data!.sentences.isNotEmpty
-                                  ? Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: _data!.sentences
-                                          .asMap()
-                                          .entries
-                                          .map((entry) {
+                                    _data!.sentences.isNotEmpty
+                              ? Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: _data!.sentences
+                                      .asMap()
+                                      .entries
+                                      .map((entry) {
                                         final isActive =
                                             entry.key == _activeSentenceIndex;
+                                        final key =
+                                            entry.key < _sentenceKeys.length
+                                            ? _sentenceKeys[entry.key]
+                                            : GlobalKey();
+                                        final fragments =
+                                            entry.key <
+                                                _data!.sentenceFragments.length
+                                            ? _data!.sentenceFragments[entry
+                                                  .key]
+                                            : [
+                                                ParagraphFragment(
+                                                  entry.value,
+                                                  false,
+                                                ),
+                                              ];
                                         return Opacity(
-                                          opacity: isActive ? 1.0 : 0.25,
+                                          key: key,
+                                          opacity: isActive ? 1.0 : 0.12,
                                           child: Padding(
                                             padding: const EdgeInsets.symmetric(
-                                                vertical: 2),
-                                            child: Text(
-                                              entry.value,
-                                              textAlign: TextAlign.center,
-                                              style: TextStyle(
-                                                fontFamily: s.fontFamily,
-                                                fontSize: s.paragraphFontSize,
-                                                height: s.paragraphLineHeight,
-                                                color: s.textColor,
+                                              vertical: 2,
+                                            ),
+                                            child: Text.rich(
+                                              TextSpan(
+                                                style: TextStyle(
+                                                  fontFamily: s.fontFamily,
+                                                  fontSize: s.paragraphFontSize,
+                                                  height: s.paragraphLineHeight,
+                                                  color: s.textColor,
+                                                ),
+                                                children: fragments
+                                                    .map(
+                                                      (f) => TextSpan(
+                                                        text: f.text,
+                                                        style: f.isItalic
+                                                            ? const TextStyle(
+                                                                fontStyle:
+                                                                    FontStyle
+                                                                        .italic,
+                                                              )
+                                                            : null,
+                                                      ),
+                                                    )
+                                                    .toList(),
                                               ),
+                                              textAlign: TextAlign.center,
                                             ),
                                           ),
                                         );
-                                      }).toList(),
-                                    )
-                                  : RichText(
-                                      textAlign: TextAlign.center,
-                                      text: TextSpan(
-                                        style: TextStyle(
-                                          fontFamily: s.fontFamily,
-                                          fontSize: s.paragraphFontSize,
-                                          height: s.paragraphLineHeight,
-                                          color: s.textColor,
-                                        ),
-                                        text: [
-                                          if (_data!.pre.isNotEmpty)
-                                            _data!.pre.endsWith('-')
-                                                ? _data!.pre
-                                                : '${_data!.pre} ',
-                                          _data!.current,
-                                          if (_data!.post.isNotEmpty)
-                                            _data!.current.endsWith('-')
-                                                ? _data!.post
-                                                : ' ${_data!.post}',
-                                        ].join(''),
-                                      ),
+                                      })
+                                      .toList(),
+                                )
+                              : RichText(
+                                  textAlign: TextAlign.center,
+                                  text: TextSpan(
+                                    style: TextStyle(
+                                      fontFamily: s.fontFamily,
+                                      fontSize: s.paragraphFontSize,
+                                      height: s.paragraphLineHeight,
+                                      color: s.textColor,
                                     ),
+                                    children: _buildParagraphSpans(),
+                                  ),
+                                ),
                         ),
                       ),
                     ),
@@ -826,7 +924,9 @@ class _ParagraphReaderState extends ConsumerState<ParagraphReader> {
                     child: IgnorePointer(
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black45,
                           borderRadius: BorderRadius.circular(12),

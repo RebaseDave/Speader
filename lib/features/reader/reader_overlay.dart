@@ -256,7 +256,7 @@ class ReaderOverlay extends ConsumerWidget {
                 }
                 final sentence = tokens
                     .sublist(start, end + 1)
-                    .where((t) => !t.isBlank && t.raw.isNotEmpty)
+                    .where((t) => !t.isBlank && !t.isSceneBreak && t.raw.isNotEmpty)
                     .map((t) => t.raw)
                     .join(' ');
 

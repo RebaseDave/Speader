@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../core/theme/app_colors.dart';
 
 class GoalCelebrationOverlay extends StatefulWidget {
   final int streakDays;
@@ -77,7 +78,7 @@ class _GoalCelebrationOverlayState extends State<GoalCelebrationOverlay>
       curve: const Interval(0.0, 0.15, curve: Curves.easeOut),
     );
 
-    _flameColor = ColorTween(begin: Colors.white30, end: Colors.orange).animate(
+    _flameColor = ColorTween(begin: Colors.white30, end: context.colors.warning).animate(
       CurvedAnimation(
         parent: _controller,
         curve: const Interval(0.2, 0.65, curve: Curves.easeInOut),
@@ -87,7 +88,7 @@ class _GoalCelebrationOverlayState extends State<GoalCelebrationOverlay>
     _borderColor =
         ColorTween(
           begin: Colors.white12,
-          end: Colors.orange.withValues(alpha: 0.7),
+          end: context.colors.warning.withValues(alpha: 0.7),
         ).animate(
           CurvedAnimation(
             parent: _controller,
@@ -181,7 +182,7 @@ class _GoalCelebrationOverlayState extends State<GoalCelebrationOverlay>
                   vertical: 24,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A2E).withValues(alpha: 0.97),
+                  color: context.colors.surfaceElevated.withValues(alpha: 0.97),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: _borderColor.value ?? Colors.white12,
@@ -189,7 +190,7 @@ class _GoalCelebrationOverlayState extends State<GoalCelebrationOverlay>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.orange.withValues(
+                      color: context.colors.warning.withValues(
                         alpha:
                             0.15 *
                             (_controller.value.clamp(0.3, 1.0) - 0.3) /
@@ -251,7 +252,7 @@ class _GoalCelebrationOverlayState extends State<GoalCelebrationOverlay>
                                 shadows: _glowRadius.value > 0
                                     ? [
                                         Shadow(
-                                          color: Colors.orange.withValues(
+                                          color: context.colors.warning.withValues(
                                             alpha: 0.6,
                                           ),
                                           blurRadius: _glowRadius.value,
@@ -297,13 +298,13 @@ class _GoalCelebrationOverlayState extends State<GoalCelebrationOverlay>
                                         child: Text(
                                           '$_newStreak',
                                           style: TextStyle(
-                                            color: Colors.orange,
+                                            color: context.colors.warning,
                                             fontSize: 38,
                                             fontWeight: FontWeight.bold,
                                             shadows: _glowRadius.value > 0
                                                 ? [
                                                     Shadow(
-                                                      color: Colors.orange
+                                                      color: context.colors.warning
                                                           .withValues(
                                                             alpha: 0.7,
                                                           ),
@@ -334,7 +335,7 @@ class _GoalCelebrationOverlayState extends State<GoalCelebrationOverlay>
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '5.000 Wörter',
+                          '3.000 Wörter',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.45),
                             fontSize: 13,

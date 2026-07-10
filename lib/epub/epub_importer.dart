@@ -18,8 +18,34 @@ class EpubImporter {
 
   EpubImporter(this._bookDao, this._orpDao);
 
+  Future<(List<Book>, List<String>)> importMultipleEpubs({
+    void Function(int done, int total)? onProgress,
+  }) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['epub'],
+      allowMultiple: true,
+    );
+if (result == null || result.files.isEmpty) return (<Book>[], <String>[]);
+
+    final imported = <Book>[];
+    final failed = <String>[];
+    final paths =
+        result.files.map((f) => f.path).whereType<String>().toList();
+
+    for (int i = 0; i < paths.length; i++) {
+      try {
+        final book = await importEpubFromPath(paths[i]);
+        if (book != null) imported.add(book);
+      } catch (e) {
+        failed.add('${paths[i].split('/').last}: $e');
+      }
+      onProgress?.call(i + 1, paths.length);
+    }
+    return (imported, failed);
+  }
+
   Future<Book?> importEpub() async {
-    // Datei auswählen
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['epub'],
@@ -71,9 +97,11 @@ class EpubImporter {
       allTokens.addAll(tokens);
     }
 
-    // Buch in DB speichern
+    final deletedMatch = await _bookDao.getDeletedBookByFileName(fileName);
+
     final book = Book(
       title: parsed.title,
+      author: parsed.author,
       filePath: destPath,
       totalWords: allTokens.length,
       currentWord: 0,
@@ -81,7 +109,13 @@ class EpubImporter {
       importedAt: DateTime.now(),
     );
 
-    final bookId = await _bookDao.insertBook(book);
+    int bookId;
+    if (deletedMatch != null && deletedMatch.id != null) {
+      bookId = deletedMatch.id!;
+      await _bookDao.reactivateBook(bookId, book);
+    } else {
+      bookId = await _bookDao.insertBook(book);
+    }
 
     // Kapitel mit bookId speichern
     final chaptersWithId = chapters
@@ -148,9 +182,11 @@ class EpubImporter {
       allTokens.addAll(tokens);
     }
 
-    // Buch in DB speichern
+    final deletedMatch = await _bookDao.getDeletedBookByFileName(fileName);
+
     final book = Book(
       title: parsed.title,
+      author: parsed.author,
       filePath: destPath,
       totalWords: allTokens.length,
       currentWord: 0,
@@ -158,7 +194,13 @@ class EpubImporter {
       importedAt: DateTime.now(),
     );
 
-    final bookId = await _bookDao.insertBook(book);
+    int bookId;
+    if (deletedMatch != null && deletedMatch.id != null) {
+      bookId = deletedMatch.id!;
+      await _bookDao.reactivateBook(bookId, book);
+    } else {
+      bookId = await _bookDao.insertBook(book);
+    }
 
     final chaptersWithId = chapters
         .map(

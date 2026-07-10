@@ -171,7 +171,7 @@ class SummaryNotifier extends Notifier<SummaryState> {
           .read(readerProvider)
           .tokens
           .where((t) => t.chapterIndex == chapterIndex)
-          .where((t) => !t.isChapterTitle && !t.isImage && !t.isBlank)
+          .where((t) => !t.isChapterTitle && !t.isImage && !t.isBlank && !t.isSceneBreak)
           .map((t) => t.raw)
           .where((r) => r.isNotEmpty)
           .join(' '),

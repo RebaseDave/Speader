@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/book.dart';
 import '../../core/database/book_dao.dart';
 import 'library_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 final archivedBooksProvider = FutureProvider<List<Book>>((ref) async {
   return BookDao().getArchivedBooks();
@@ -45,37 +46,10 @@ class ArchiveScreen extends ConsumerWidget {
               ),
             );
           }
-          final seriesMap = <String, List<Book>>{};
-          for (final book in books.where(
-            (b) =>
-                b.series != null &&
-                b.series!.isNotEmpty &&
-                !b.isExplain &&
-                !b.isManual,
-          )) {
-            seriesMap.putIfAbsent(book.series!, () => []).add(book);
-          }
-          final mainBooks = books
-              .where((b) => b.isBook && (b.series == null || b.series!.isEmpty))
-              .toList();
-          final deeps = books
-              .where((b) => b.isDeep && (b.series == null || b.series!.isEmpty))
-              .toList();
-          final shorts = books
-              .where(
-                (b) =>
-                    !b.isBook &&
-                    !b.isDeep &&
-                    !b.isExplain &&
-                    !b.isManual &&
-                    (b.series == null || b.series!.isEmpty),
-              )
-              .toList();
           return _ArchiveList(
-            mainBooks: mainBooks,
-            deeps: deeps,
-            shorts: shorts,
-            seriesMap: seriesMap,
+            mainBooks: books.where((b) => b.isBook).toList(),
+            deeps: const [],
+            shorts: const [],
           );
         },
       ),
@@ -87,12 +61,10 @@ class _ArchiveList extends StatefulWidget {
   final List<Book> mainBooks;
   final List<Book> deeps;
   final List<Book> shorts;
-  final Map<String, List<Book>> seriesMap;
   const _ArchiveList({
     required this.mainBooks,
     required this.deeps,
     required this.shorts,
-    required this.seriesMap,
   });
 
   @override
@@ -102,72 +74,98 @@ class _ArchiveList extends StatefulWidget {
 class _ArchiveListState extends State<_ArchiveList> {
   bool _deepsExpanded = false;
   bool _shortsExpanded = false;
+  final Map<String, bool> _authorExpanded = {};
   final Map<String, bool> _seriesExpanded = {};
+
+  List<Widget> _buildSeriesAndBooks(List<Book> books) {
+    final seriesMap = <String, List<Book>>{};
+    final noSeries = <Book>[];
+    for (final b in books) {
+      final s = b.series?.isNotEmpty == true &&
+              b.series != '__erklaerung__' &&
+              b.series != '__manuell__'
+          ? b.series : null;
+      if (s != null) {
+        seriesMap.putIfAbsent(s, () => []).add(b);
+      } else {
+        noSeries.add(b);
+      }
+    }
+    final result = <Widget>[];
+    for (final e in seriesMap.entries) {
+      final expanded = _seriesExpanded[e.key] ?? false;
+      result.add(Column(children: [
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () => setState(() => _seriesExpanded[e.key] = !expanded),
+          child: Container(
+            margin: const EdgeInsets.only(left: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(children: [
+              const Icon(Icons.folder_outlined, color: Colors.white54, size: 16),
+              const SizedBox(width: 8),
+              Expanded(child: Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 14))),
+              Text('(${e.value.length})', style: const TextStyle(color: Colors.white38, fontSize: 12)),
+              const SizedBox(width: 6),
+              Icon(expanded ? Icons.expand_less : Icons.expand_more, color: Colors.white38, size: 16),
+            ]),
+          ),
+        ),
+        if (expanded) ...e.value.map((b) => _ArchivedBookCard(book: b)),
+      ]));
+    }
+    result.addAll(noSeries.map((b) => _ArchivedBookCard(book: b)));
+    return result;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final authorMap = <String, List<Book>>{};
+    final noAuthor = <Book>[];
+    for (final b in widget.mainBooks) {
+      final a = b.author?.isNotEmpty == true ? b.author : null;
+      if (a != null) {
+        authorMap.putIfAbsent(a, () => []).add(b);
+      } else {
+        noAuthor.add(b);
+      }
+    }
+    final sortedAuthors = authorMap.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
       children: [
-        ...widget.mainBooks.map((book) => _ArchivedBookCard(book: book)),
-        // Reihen-Ordner
-        ...widget.seriesMap.entries.map((e) {
-          final expanded = _seriesExpanded[e.key] ?? false;
-          return Column(
-            children: [
-              const SizedBox(height: 8),
-              GestureDetector(
-                onTap: () => setState(() => _seriesExpanded[e.key] = !expanded),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.folder_outlined,
-                        color: Theme.of(context).colorScheme.primary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          e.key,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '(${e.value.length})',
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        expanded ? Icons.expand_less : Icons.expand_more,
-                        color: Colors.white38,
-                      ),
-                    ],
-                  ),
+        ...sortedAuthors.map((author) {
+          final expanded = _authorExpanded[author] ?? false;
+          return Column(children: [
+            GestureDetector(
+              onTap: () => setState(() => _authorExpanded[author] = !expanded),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                child: Row(children: [
+                  const Icon(Icons.person_outline, color: Colors.white54, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(author, style: const TextStyle(color: Colors.white70, fontSize: 15, fontWeight: FontWeight.w600))),
+                  Text('(${authorMap[author]!.length})', style: const TextStyle(color: Colors.white38, fontSize: 13)),
+                  const SizedBox(width: 8),
+                  Icon(expanded ? Icons.expand_less : Icons.expand_more, color: Colors.white38),
+                ]),
               ),
-              if (expanded) ...[
-                const SizedBox(height: 8),
-                ...e.value.map((book) => _ArchivedBookCard(book: book)),
-              ],
-            ],
-          );
+            ),
+            if (expanded) ..._buildSeriesAndBooks(authorMap[author]!),
+          ]);
         }),
+        ..._buildSeriesAndBooks(noAuthor),
 
         // Deep
         if (widget.deeps.isNotEmpty) ...[
@@ -297,7 +295,7 @@ class _ArchivedBookCard extends ConsumerWidget {
         padding: const EdgeInsets.only(right: 16),
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: Colors.redAccent,
+          color: context.colors.danger,
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
@@ -322,9 +320,9 @@ class _ArchivedBookCard extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
+                child: Text(
                   'Entfernen',
-                  style: TextStyle(color: Colors.redAccent),
+                  style: TextStyle(color: context.colors.danger),
                 ),
               ),
             ],

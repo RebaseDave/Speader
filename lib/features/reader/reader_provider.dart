@@ -22,6 +22,12 @@ import '../companions/companion_provider.dart';
 
 final sessionDaoProvider = Provider<SessionDao>((ref) => SessionDao());
 
+class ParagraphFragment {
+  final String text;
+  final bool isItalic;
+  const ParagraphFragment(this.text, this.isItalic);
+}
+
 class ParagraphData {
   final String pre;
   final String current;
@@ -31,7 +37,12 @@ class ParagraphData {
   final bool isTitlePage;
   final bool isImagePage;
   final String imageKey;
+  final bool isSceneBreakPage;
   final List<String> sentences;
+  final List<List<ParagraphFragment>> sentenceFragments;
+  final List<ParagraphFragment> preFragments;
+  final List<ParagraphFragment> postFragments;
+  final bool currentIsItalic;
 
   const ParagraphData({
     required this.pre,
@@ -42,7 +53,12 @@ class ParagraphData {
     this.isTitlePage = false,
     this.isImagePage = false,
     this.imageKey = '',
+    this.isSceneBreakPage = false,
     this.sentences = const [],
+    this.sentenceFragments = const [],
+    this.preFragments = const [],
+    this.postFragments = const [],
+    this.currentIsItalic = false,
   });
 }
 
@@ -200,6 +216,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
             isDashEnd: token.isDashEnd,
             isChapterTitle: token.isChapterTitle,
             chapterIndex: token.chapterIndex,
+            isItalic: token.isItalic,
           );
         }).toList();
 
@@ -247,13 +264,22 @@ class ReaderNotifier extends Notifier<ReaderState> {
         final start = chapterStarts[ch.indexInBook];
         final end = chapterEnds[ch.indexInBook];
         if (start == null || end == null) return ch;
+        final realWords = enrichedTokens
+            .sublist(start, end + 1)
+            .where((t) =>
+                !t.isBlank &&
+                !t.isImage &&
+                !t.isChapterTitle &&
+                !t.isSceneBreak &&
+                t.raw.isNotEmpty)
+            .length;
         return Chapter(
           id: ch.id,
           bookId: ch.bookId,
           indexInBook: ch.indexInBook,
           title: ch.title,
           startWord: start,
-          wordCount: end - start + 1,
+          wordCount: realWords,
         );
       }).toList();
 
@@ -287,7 +313,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
   String chapterText(int chapterIndex) {
     return state.tokens
         .where((t) => t.chapterIndex == chapterIndex)
-        .where((t) => !t.isChapterTitle && !t.isImage && !t.isBlank)
+        .where((t) => !t.isChapterTitle && !t.isImage && !t.isBlank && !t.isSceneBreak)
         .map((t) => t.raw)
         .where((r) => r.isNotEmpty)
         .join(' ');
@@ -325,6 +351,17 @@ class ReaderNotifier extends Notifier<ReaderState> {
       );
     }
 
+    // Szenenwechsel (leerer Absatz im Original) als eigene Seite anzeigen
+    if (currentToken.isSceneBreak) {
+      return const ParagraphData(
+        pre: '',
+        current: '',
+        post: '',
+        orpIndex: 0,
+        isSceneBreakPage: true,
+      );
+    }
+
     int start = idx;
     while (start > 0) {
       final prev = tokens[start - 1];
@@ -340,7 +377,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
     }
 
     bool usable(WordToken t) =>
-        !t.isBlank && !t.isImage && !t.isChapterTitle && t.raw.isNotEmpty;
+        !t.isBlank && !t.isImage && !t.isChapterTitle && !t.isSceneBreak && t.raw.isNotEmpty;
 
     String joinRaw(List<WordToken> list) {
       if (list.isEmpty) return '';
@@ -362,27 +399,65 @@ class ReaderNotifier extends Notifier<ReaderState> {
     final pre = joinRaw(preTokens);
     final post = joinRaw(postTokens);
 
-    final sentences = _buildSentenceChunks(tokens, start, end);
+    final built = _buildSentenceChunks(tokens, start, end);
 
     return ParagraphData(
       pre: pre,
       current: usable(currentToken) ? currentToken.raw : '',
       post: post,
       orpIndex: currentToken.orpIndex,
-      sentences: sentences,
+      sentences: built.chunks,
+      sentenceFragments: built.fragments,
+      preFragments: _fragmentsFromTokens(preTokens),
+      postFragments: _fragmentsFromTokens(postTokens),
+      currentIsItalic: usable(currentToken) ? currentToken.isItalic : false,
     );
   }
 
-  List<String> _buildSentenceChunks(
-      List<WordToken> tokens, int start, int end) {
+  /// Gruppiert aufeinanderfolgende Tokens mit gleichem Kursiv-Status zu
+  /// Textfragmenten — rein fürs Rendering, rührt an der Zähllogik nichts an.
+  List<ParagraphFragment> _fragmentsFromTokens(List<WordToken> tokens) {
+    if (tokens.isEmpty) return [];
+    final fragments = <ParagraphFragment>[];
+    final buf = StringBuffer();
+    bool? currentItalic;
+    for (int i = 0; i < tokens.length; i++) {
+      final t = tokens[i];
+      if (currentItalic != null && t.isItalic != currentItalic) {
+        fragments.add(ParagraphFragment(buf.toString(), currentItalic));
+        buf.clear();
+      }
+      currentItalic = t.isItalic;
+      buf.write(t.raw);
+      if (i < tokens.length - 1 && !t.raw.endsWith('-')) buf.write(' ');
+    }
+    if (buf.isNotEmpty) {
+      fragments.add(ParagraphFragment(buf.toString(), currentItalic ?? false));
+    }
+    return fragments;
+  }
+
+  ({List<String> chunks, List<List<ParagraphFragment>> fragments})
+      _buildSentenceChunks(List<WordToken> tokens, int start, int end) {
     bool usable(WordToken t) =>
-        !t.isBlank && !t.isImage && !t.isChapterTitle && t.raw.isNotEmpty;
+        !t.isBlank && !t.isImage && !t.isChapterTitle && !t.isSceneBreak && t.raw.isNotEmpty;
 
     final rawSentences = <List<WordToken>>[];
     var current = <WordToken>[];
     for (int i = start; i <= end; i++) {
       final t = tokens[i];
       if (!usable(t)) continue;
+
+      // Ein alleinstehendes schließendes Anführungszeichen/Klammer (durch ein
+      // Leerzeichen vom Satzende getrennt, z.B. "auf. «") gehört noch zum
+      // gerade abgeschlossenen Satz, nicht zu einem neuen.
+      if (current.isEmpty &&
+          rawSentences.isNotEmpty &&
+          RegExp(r'^[»«)\]]+$').hasMatch(t.raw)) {
+        rawSentences.last.add(t);
+        continue;
+      }
+
       current.add(t);
       if (t.isSentenceEnd || t.isParagraphEnd || i == end) {
         if (current.isNotEmpty) {
@@ -392,9 +467,12 @@ class ReaderNotifier extends Notifier<ReaderState> {
       }
     }
     if (current.isNotEmpty) rawSentences.add(current);
-    if (rawSentences.isEmpty) return [];
+    if (rawSentences.isEmpty) {
+      return (chunks: <String>[], fragments: <List<ParagraphFragment>>[]);
+    }
 
     final chunks = <String>[];
+    final fragmentChunks = <List<ParagraphFragment>>[];
     int i = 0;
     while (i < rawSentences.length) {
       if (rawSentences[i].length < 3) {
@@ -409,13 +487,15 @@ class ReaderNotifier extends Notifier<ReaderState> {
         } else {
           chunks.add(_joinTokensRaw(run[0]));
         }
+        fragmentChunks.add(_fragmentsFromTokens(run.expand((s) => s).toList()));
         i = j;
       } else {
         chunks.add(_joinTokensRaw(rawSentences[i]));
+        fragmentChunks.add(_fragmentsFromTokens(rawSentences[i]));
         i++;
       }
     }
-    return chunks;
+    return (chunks: chunks, fragments: fragmentChunks);
   }
 
   String _joinTokensRaw(List<WordToken> tokens) {
@@ -487,7 +567,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
         .sublist(start, end + 1)
         .where(
           (t) =>
-              !t.isBlank && !t.isImage && !t.isChapterTitle && t.raw.isNotEmpty,
+              !t.isBlank && !t.isImage && !t.isChapterTitle && !t.isSceneBreak && t.raw.isNotEmpty,
         )
         .length;
   }
@@ -533,9 +613,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
     final prevStart = _paraStart(prevEnd);
 
     if (countWords) {
-      _paragraphWordsAccumulated =
-          (_paragraphWordsAccumulated - _countParaWords(prevStart, prevEnd))
-              .clamp(0, 999999);
+      _paragraphWordsAccumulated -= _countParaWords(prevStart, prevEnd);
     }
 
     _engine.jumpToWord(prevStart);
@@ -546,7 +624,7 @@ class ReaderNotifier extends Notifier<ReaderState> {
     int estimatedSeconds, {
     DateTime? startedAt,
   }) async {
-    if (_paragraphWordsAccumulated == 0) return;
+    if (_paragraphWordsAccumulated <= 0) return;
     final book = state.book;
     if (book == null) return;
     await ref

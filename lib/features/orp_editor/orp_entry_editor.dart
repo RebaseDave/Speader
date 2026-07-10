@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/models/orp_entry.dart';
 import 'orp_editor_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 class OrpEntryEditor extends ConsumerWidget {
   final OrpEntry entry;
@@ -39,8 +40,8 @@ class OrpEntryEditor extends ConsumerWidget {
                     ),
                     TextSpan(
                       text: focus,
-                      style: const TextStyle(
-                        color: Color(0xFFE53935),
+                      style: TextStyle(
+                        color: context.colors.danger,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),

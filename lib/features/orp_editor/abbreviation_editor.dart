@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'orp_editor_provider.dart';
 import '../../core/database/token_cache_dao.dart';
+import '../../core/theme/app_colors.dart';
+
 
 class AbbreviationEditor extends ConsumerStatefulWidget {
   const AbbreviationEditor({super.key});
@@ -80,8 +82,8 @@ class _AbbreviationEditorState extends ConsumerState<AbbreviationEditor> {
                       title: Text(abbr,
                           style: const TextStyle(color: Colors.white)),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: Colors.redAccent),
+                        icon: Icon(Icons.delete_outline,
+                            color: context.colors.danger),
                         onPressed: () => ref
                             .read(orpEditorProvider.notifier)
                             .deleteAbbreviation(abbr),

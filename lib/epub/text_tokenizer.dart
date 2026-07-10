@@ -9,27 +9,60 @@ class TextTokenizer {
 
   List<WordToken> tokenize(List<String> rawTokens, int chapterIndex) {
     final tokens = <WordToken>[];
+    var insideItalic = false;
 
     for (int i = 0; i < rawTokens.length; i++) {
       final raw = rawTokens[i];
 
+      // Kursiv-Marker → Zustand umschalten, kein eigenes Token
+      if (SentenceDetector.isItalicStartMarker(raw)) {
+        insideItalic = true;
+        continue;
+      }
+      if (SentenceDetector.isItalicEndMarker(raw)) {
+        insideItalic = false;
+        continue;
+      }
+
       // Absatz-Marker → letztes Wort als Absatzende markieren
       if (SentenceDetector.isParagraphMarker(raw)) {
         if (tokens.isNotEmpty) {
-          final last = tokens.removeLast();
-          tokens.add(
-            WordToken(
-              raw: last.raw,
-              normalized: last.normalized,
-              orpIndex: last.orpIndex,
-              isSentenceEnd: last.isSentenceEnd,
-              isCommaEnd: last.isCommaEnd,
-              isParagraphEnd: true,
-              isDashEnd: last.isDashEnd,
-              isChapterTitle: last.isChapterTitle,
-              chapterIndex: last.chapterIndex,
-            ),
-          );
+          final last = tokens.last;
+          // Zweiter Absatz-Marker direkt hintereinander (kein Wort dazwischen)
+          // = leerer Absatz im Original = Szenenwechsel. Eigenes Token dafür,
+          // damit der Reader daraus eine eigene Seite bauen kann.
+          if (last.isParagraphEnd && !last.isSceneBreak && !last.isChapterTitle) {
+            tokens.add(
+              WordToken(
+                raw: '__SCENE_BREAK__',
+                normalized: '__SCENE_BREAK__',
+                orpIndex: 0,
+                isSentenceEnd: false,
+                isCommaEnd: false,
+                isParagraphEnd: true,
+                isDashEnd: false,
+                isChapterTitle: false,
+                chapterIndex: last.chapterIndex,
+                isItalic: false,
+              ),
+            );
+          } else {
+            final removed = tokens.removeLast();
+            tokens.add(
+              WordToken(
+                raw: removed.raw,
+                normalized: removed.normalized,
+                orpIndex: removed.orpIndex,
+                isSentenceEnd: removed.isSentenceEnd,
+                isCommaEnd: removed.isCommaEnd,
+                isParagraphEnd: true,
+                isDashEnd: removed.isDashEnd,
+                isChapterTitle: removed.isChapterTitle,
+                chapterIndex: removed.chapterIndex,
+                isItalic: removed.isItalic,
+              ),
+            );
+          }
         }
         continue;
       }
@@ -69,6 +102,7 @@ class TextTokenizer {
             isParagraphEnd: false,
             isChapterTitle: false,
             chapterIndex: chapterIndex,
+            isItalic: insideItalic,
           ),
         );
         continue;
@@ -76,7 +110,7 @@ class TextTokenizer {
 
       if (normalized.isEmpty) {
         final hasMeaningfulChar =
-            RegExp(r'[–—«»?!;…]').hasMatch(raw) || raw.contains('...');
+            RegExp(r'[.–—«»?!;…]').hasMatch(raw) || raw.contains('...');
         if (!hasMeaningfulChar) continue;
 
         final sentenceEnd =
@@ -98,6 +132,7 @@ class TextTokenizer {
             isParagraphEnd: false,
             isChapterTitle: false,
             chapterIndex: chapterIndex,
+            isItalic: insideItalic,
           ),
         );
         continue;
@@ -141,6 +176,7 @@ class TextTokenizer {
                 isParagraphEnd: false,
                 isChapterTitle: false,
                 chapterIndex: chapterIndex,
+                isItalic: insideItalic,
               ),
             );
           }
@@ -158,6 +194,7 @@ class TextTokenizer {
               isParagraphEnd: false,
               isChapterTitle: false,
               chapterIndex: chapterIndex,
+              isItalic: insideItalic,
             ),
           );
         }
@@ -188,6 +225,7 @@ class TextTokenizer {
             isParagraphEnd: false,
             isChapterTitle: false,
             chapterIndex: chapterIndex,
+            isItalic: insideItalic,
           ),
         );
       }
@@ -203,6 +241,7 @@ class TextTokenizer {
           isParagraphEnd: false,
           isChapterTitle: false,
           chapterIndex: chapterIndex,
+          isItalic: insideItalic,
         ),
       );
     }

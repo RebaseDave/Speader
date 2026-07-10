@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'companion.dart';
 import 'companion_definition.dart';
+import '../../core/theme/app_colors.dart';
 
 class CompanionLevelUpOverlay extends StatefulWidget {
   final int slot;
@@ -64,7 +65,7 @@ class _CompanionLevelUpOverlayState extends State<CompanionLevelUpOverlay>
     final isPrestige =
         widget.slot == 11 && widget.newLevel >= Companion.maxLevel;
     final color =
-        isPrestige ? const Color(0xFFFFD700) : const Color(0xFF00B4D8);
+        isPrestige ? context.colors.gold : context.colors.accent;
     final levelText = isPrestige
         ? '★${widget.newLevel - 100}'
         : 'Level ${widget.newLevel}';
@@ -92,7 +93,7 @@ class _CompanionLevelUpOverlayState extends State<CompanionLevelUpOverlay>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: const Color(0xFF112240),
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: color.withValues(alpha: 0.6),

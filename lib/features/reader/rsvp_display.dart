@@ -183,6 +183,9 @@ class RsvpDisplay extends StatelessWidget {
                           fontFamily: settings.fontFamily,
                           fontSize: settings.fontSize,
                           color: settings.textColor,
+                          fontStyle: token!.isItalic
+                              ? FontStyle.italic
+                              : FontStyle.normal,
                         ),
                       ),
                       TextSpan(
@@ -194,6 +197,9 @@ class RsvpDisplay extends StatelessWidget {
                           fontWeight: settings.orpBold
                               ? FontWeight.bold
                               : FontWeight.normal,
+                          fontStyle: token!.isItalic
+                              ? FontStyle.italic
+                              : FontStyle.normal,
                         ),
                       ),
                       TextSpan(
@@ -202,6 +208,9 @@ class RsvpDisplay extends StatelessWidget {
                           fontFamily: settings.fontFamily,
                           fontSize: settings.fontSize,
                           color: settings.textColor,
+                          fontStyle: token!.isItalic
+                              ? FontStyle.italic
+                              : FontStyle.normal,
                         ),
                       ),
                     ],
@@ -221,6 +230,7 @@ class RsvpDisplay extends StatelessWidget {
                   fontSize: settings.fontSize,
                   fontFamily: settings.fontFamily,
                   orpBold: settings.orpBold,
+                  italic: token!.isItalic,
                 ),
               ),
             // Dot absolut fixiert unter Screenmitte
@@ -253,6 +263,7 @@ class _OrpWordLayoutTextOnly extends StatelessWidget {
   final double fontSize;
   final String fontFamily;
   final bool orpBold;
+  final bool italic;
   const _OrpWordLayoutTextOnly({
     required this.before,
     required this.focus,
@@ -262,6 +273,7 @@ class _OrpWordLayoutTextOnly extends StatelessWidget {
     required this.fontSize,
     required this.fontFamily,
     required this.orpBold,
+    this.italic = false,
   });
 
   TextStyle _style(Color color, [double? size]) {
@@ -269,6 +281,7 @@ class _OrpWordLayoutTextOnly extends StatelessWidget {
       fontFamily: fontFamily,
       fontSize: size ?? fontSize,
       color: color,
+      fontStyle: italic ? FontStyle.italic : FontStyle.normal,
     );
   }
 

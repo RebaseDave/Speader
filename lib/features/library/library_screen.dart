@@ -20,6 +20,7 @@ import 'stats_sheet.dart';
 import '../library/archive_screen.dart';
 import 'dart:math';
 import '../companions/companion_provider.dart';
+import '../../core/theme/app_colors.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -28,7 +29,30 @@ class LibraryScreen extends ConsumerStatefulWidget {
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
 }
 
+enum _SortOrder { recent, title, author }
+
+final librarySelectionProvider = StateProvider<Set<int>>((ref) => const {});
+
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
+  int _speaderTapCount = 0;
+  DateTime? _lastTap;
+  final _SortOrder _sortOrder = _SortOrder.recent;
+
+  void _onSpeaderTap() {
+    final now = DateTime.now();
+    if (_lastTap == null ||
+        now.difference(_lastTap!) > const Duration(seconds: 1)) {
+      _speaderTapCount = 1;
+    } else {
+      _speaderTapCount++;
+    }
+    _lastTap = now;
+    if (_speaderTapCount >= 3) {
+      _speaderTapCount = 0;
+      context.push('/scoreboard');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final libraryAsync = ref.watch(libraryProvider);
@@ -43,7 +67,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: Text.rich(
+        title: GestureDetector(
+          onTap: _onSpeaderTap,
+          child: Text.rich(
           TextSpan(
             children: [
               const TextSpan(
@@ -73,12 +99,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             ],
           ),
         ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.tune, color: Colors.white),
             onPressed: () => context.push('/settings'),
             tooltip: 'Einstellungen',
           ),
+          
           IconButton(
             icon: const Icon(Icons.pets, color: Colors.white),
             onPressed: () => context.push('/companions'),
@@ -132,55 +160,159 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
               error: (e, _) => Center(child: Text('Fehler: $e')),
               data: (books) => books.isEmpty
                   ? const _EmptyLibrary()
-                  : _BookList(books: books),
+                  : _BookList(books: books, sortOrder: _sortOrder),
             ),
           ),
         ],
       ),
-      floatingActionButton: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton.extended(
-            heroTag: 'text_import',
-            backgroundColor: Theme.of(context).cardColor,
-            onPressed: () => _showTextImportDialog(context, ref),
-            icon: const Icon(Icons.content_paste, color: Colors.white),
-            label: const Text(
-              'Text einfügen',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-          const SizedBox(width: 12),
-          FloatingActionButton.extended(
-            heroTag: 'epub_import',
-            backgroundColor: Theme.of(context).colorScheme.primary,
-            onPressed: () => _importEpub(context, ref),
-            icon: const Icon(Icons.add, color: Colors.white),
-            label: const Text(
-              'EPUB importieren',
-              style: TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
+      floatingActionButton: Consumer(
+        builder: (context, ref, _) {
+          final selection = ref.watch(librarySelectionProvider);
+          if (selection.isNotEmpty) {
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.extended(
+                  heroTag: 'clear_selection',
+                  backgroundColor: Theme.of(context).cardColor,
+                  onPressed: () => ref.read(librarySelectionProvider.notifier).state = const {},
+                  icon: const Icon(Icons.close, color: Colors.white),
+                  label: Text('${selection.length} abwählen',
+                      style: const TextStyle(color: Colors.white)),
+                ),
+                const SizedBox(width: 12),
+                FloatingActionButton.extended(
+                  heroTag: 'set_series',
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  onPressed: () async {
+                    await _showSeriesDialogMultiple(context, selection.toList(), ref);
+                    ref.read(librarySelectionProvider.notifier).state = const {};
+                  },
+                  icon: const Icon(Icons.folder_outlined, color: Colors.white),
+                  label: Text('Reihe festlegen (${selection.length})',
+                      style: const TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          }
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              FloatingActionButton.extended(
+                heroTag: 'text_import',
+                backgroundColor: Theme.of(context).cardColor,
+                onPressed: () => _showTextImportDialog(context, ref),
+                icon: const Icon(Icons.content_paste, color: Colors.white),
+                label: const Text('Text einfügen',
+                    style: TextStyle(color: Colors.white)),
+              ),
+              const SizedBox(width: 12),
+              FloatingActionButton.extended(
+                heroTag: 'epub_import',
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                onPressed: () => _importEpubs(context, ref),
+                icon: const Icon(Icons.add, color: Colors.white),
+                label: const Text('EPUB importieren',
+                    style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Future<void> _importEpub(BuildContext context, WidgetRef ref) async {
+  Future<void> _importEpubs(BuildContext context, WidgetRef ref) async {
     final importer = EpubImporter(BookDao(), OrpDao());
-
     final scaffoldMessenger = ScaffoldMessenger.of(context);
 
+    // Fortschritts-Dialog
+    int done = 0;
+    int total = 0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) {
+          return AlertDialog(
+            backgroundColor: Theme.of(context).cardColor,
+            title: const Text('Importiere...',
+                style: TextStyle(color: Colors.white)),
+            content: total == 0
+                ? const SizedBox(
+                    height: 40,
+                    child: Center(child: CircularProgressIndicator()))
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      LinearProgressIndicator(
+                        value: done / total,
+                        backgroundColor: Colors.white12,
+                        valueColor: AlwaysStoppedAnimation(
+                            Theme.of(context).colorScheme.primary),
+                      ),
+                      const SizedBox(height: 12),
+                      Text('$done / $total',
+                          style: const TextStyle(color: Colors.white70)),
+                    ],
+                  ),
+          );
+        },
+      ),
+    );
+
     try {
-      final book = await importer.importEpub();
-      if (book != null) {
-        ref.invalidate(libraryProvider);
+      final (books, errors) = await importer.importMultipleEpubs(
+        onProgress: (d, t) {
+          done = d;
+          total = t;
+        },
+      );
+      if (context.mounted) Navigator.of(context).pop();
+      ref.invalidate(libraryProvider);
+      if (errors.isNotEmpty) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: Theme.of(context).cardColor,
+            title: Text(
+              '${books.length} importiert · ${errors.length} Fehler',
+              style: const TextStyle(color: Colors.white),
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: errors.length,
+                itemBuilder: (_, i) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Text(
+                    errors[i],
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      } else if (books.isNotEmpty) {
         scaffoldMessenger.showSnackBar(
-          SnackBar(content: Text('„${book.title}" importiert!')),
+          SnackBar(
+            content: Text('${books.length} importiert'),
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     } catch (e) {
+      if (context.mounted) Navigator.of(context).pop();
       scaffoldMessenger.showSnackBar(
         SnackBar(content: Text('Fehler beim Import: $e')),
       );
@@ -341,101 +473,48 @@ class _EmptyLibrary extends StatelessWidget {
 
 class _BookList extends StatelessWidget {
   final List<Book> books;
-  const _BookList({required this.books});
+  final _SortOrder sortOrder;
+  const _BookList({required this.books, required this.sortOrder});
+
+  List<Book> _sorted(List<Book> list) {
+    final copy = [...list];
+    if (sortOrder == _SortOrder.title) {
+      copy.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    } else if (sortOrder == _SortOrder.author) {
+      copy.sort((a, b) {
+        final aA = a.author?.toLowerCase() ?? 'zzz';
+        final bA = b.author?.toLowerCase() ?? 'zzz';
+        final cmp = aA.compareTo(bA);
+        return cmp != 0 ? cmp : a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    }
+    return copy;
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Angefangene nach Typ getrennt
-    // DB-Reihenfolge (zuletzt gelesen) bleibt erhalten, nur nach Typ gruppiert
-    final inProgressBooks = books
-        .where((b) => b.currentWord > 0 && b.isBook)
-        .toList();
-    final inProgressDeeps = books
-        .where((b) => b.currentWord > 0 && b.isDeep)
-        .toList();
-    final inProgressShorts = books
-        .where(
-          (b) =>
-              b.currentWord > 0 &&
-              !b.isBook &&
-              !b.isDeep &&
-              !b.isExplain &&
-              !b.isManual,
-        )
-        .toList();
-    final inProgressManuals = books
-        .where((b) => b.currentWord > 0 && b.isManual)
+    final inProgress = books
+        .where((b) => b.currentWord > 0)
         .toList();
 
-    final inProgress = [
-      ...inProgressBooks,
-      ...inProgressDeeps,
-      ...inProgressShorts,
-      ...inProgressManuals,
-    ];
-
-    // Unangefangene ohne Serie
     final unstarted = books.where((b) => b.currentWord == 0).toList();
 
-    final seriesMap = <String, List<Book>>{};
-    for (final book in unstarted.where(
-      (b) =>
-          b.series != null &&
-          b.series!.isNotEmpty &&
-          !b.isExplain &&
-          !b.isManual,
-    )) {
-      seriesMap.putIfAbsent(book.series!, () => []).add(book);
-    }
-
-    final unstartedBooks = unstarted
-        .where((b) => b.isBook && (b.series == null || b.series!.isEmpty))
-        .toList();
-    final unstartedDeeps = unstarted
-        .where((b) => b.isDeep && (b.series == null || b.series!.isEmpty))
-        .toList();
-    final unstartedShorts = unstarted
-        .where(
-          (b) =>
-              !b.isBook &&
-              !b.isDeep &&
-              !b.isExplain &&
-              !b.isManual &&
-              (b.series == null || b.series!.isEmpty),
-        )
-        .toList();
+    final unstartedBooks = unstarted.where((b) => b.isBook).toList();
     final unstartedManuals = unstarted.where((b) => b.isManual).toList();
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
       children: [
-        // Angefangene oben
         ...inProgress.map((b) => _BookCard(book: b)),
-
-        // Trennlinie
         if (inProgress.isNotEmpty &&
-            (unstartedManuals.isNotEmpty ||
-                unstartedBooks.isNotEmpty ||
-                unstartedDeeps.isNotEmpty ||
-                unstartedShorts.isNotEmpty ||
-                seriesMap.isNotEmpty))
+            (unstartedManuals.isNotEmpty || unstartedBooks.isNotEmpty))
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Divider(color: Colors.white12),
           ),
-
-        // Manuell eingefügte Texte als einzelne Cards
         ...unstartedManuals.map((b) => _BookCard(book: b)),
-
-        // Ordner in gewünschter Reihenfolge
-        if (unstartedBooks.isNotEmpty) _BooksFolder(books: unstartedBooks),
-        if (unstartedDeeps.isNotEmpty)
-          _DeepFolder(books: unstartedDeeps, isArchive: false),
-        if (unstartedShorts.isNotEmpty)
-          _ShortsFolder(books: unstartedShorts, isArchive: false),
-        ...seriesMap.entries.map(
-          (e) => _SeriesFolder(name: e.key, books: e.value, isArchive: false),
-        ),
+        if (unstartedBooks.isNotEmpty)
+          _BooksFolder(books: _sorted(unstartedBooks)),
       ],
     );
   }
@@ -496,7 +575,108 @@ class _BooksFolderState extends State<_BooksFolder> {
             ),
           ),
         ),
-        if (_expanded) ...widget.books.map((b) => _BookCard(book: b)),
+        if (_expanded) ...[
+          ..._buildAuthorGroups(widget.books),
+        ],
+      ],
+    );
+  }
+
+  List<Widget> _buildAuthorGroups(List<Book> books) {
+    final authorMap = <String, List<Book>>{};
+    final noAuthor = <Book>[];
+    for (final b in books) {
+      final a = b.author?.isNotEmpty == true ? b.author : null;
+      if (a != null) {
+        authorMap.putIfAbsent(a, () => []).add(b);
+      } else {
+        noAuthor.add(b);
+      }
+    }
+    final sorted = authorMap.keys.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return [
+      ...sorted.map((a) => _AuthorFolder(author: a, books: authorMap[a]!)),
+      ..._seriesAndBooks(noAuthor, isArchive: false),
+    ];
+  }
+
+  static List<Widget> _seriesAndBooks(List<Book> books,
+      {required bool isArchive}) {
+    final seriesMap = <String, List<Book>>{};
+    final noSeries = <Book>[];
+    for (final b in books) {
+      final s = b.series?.isNotEmpty == true &&
+              b.series != '__erklaerung__' &&
+              b.series != '__manuell__'
+          ? b.series
+          : null;
+      if (s != null) {
+        seriesMap.putIfAbsent(s, () => []).add(b);
+      } else {
+        noSeries.add(b);
+      }
+    }
+    return [
+      ...seriesMap.entries.map(
+          (e) => _SeriesFolder(name: e.key, books: e.value, isArchive: isArchive)),
+      ...noSeries.map((b) => _BookCard(book: b)),
+    ];
+  }
+}
+
+class _AuthorFolder extends StatefulWidget {
+  final String author;
+  final List<Book> books;
+  const _AuthorFolder({required this.author, required this.books});
+
+  @override
+  State<_AuthorFolder> createState() => _AuthorFolderState();
+}
+
+class _AuthorFolderState extends State<_AuthorFolder> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 4, left: 12),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor.withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.person_outline,
+                    color: Colors.white54, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(widget.author,
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 14)),
+                ),
+                Text('(${widget.books.length})',
+                    style: const TextStyle(
+                        color: Colors.white38, fontSize: 12)),
+                const SizedBox(width: 6),
+                Icon(
+                  _expanded ? Icons.expand_less : Icons.expand_more,
+                  color: Colors.white38,
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded)
+          ..._BooksFolderState._seriesAndBooks(widget.books,
+              isArchive: false),
       ],
     );
   }
@@ -699,6 +879,23 @@ class _BookCard extends ConsumerWidget {
   final Book book;
   const _BookCard({required this.book});
 
+  bool _isSelected(WidgetRef ref) =>
+      ref.watch(librarySelectionProvider).contains(book.id);
+
+  bool _inSelectionMode(WidgetRef ref) =>
+      ref.watch(librarySelectionProvider).isNotEmpty;
+
+  void _toggleSelection(WidgetRef ref) {
+    final notifier = ref.read(librarySelectionProvider.notifier);
+    final current = Set<int>.from(notifier.state);
+    if (current.contains(book.id)) {
+      current.remove(book.id);
+    } else {
+      if (book.id != null) current.add(book.id!);
+    }
+    notifier.state = current;
+  }
+
   String _estimateRemaining(Book book) {
     if (book.currentWord <= 0 || book.totalWords <= 0) return '';
     final wordsLeft = book.totalWords - book.currentWord;
@@ -792,6 +989,7 @@ class _BookCard extends ConsumerWidget {
     final progress = book.totalWords > 0
         ? (book.currentWord / book.totalWords * 100).toStringAsFixed(1)
         : '0.0';
+    final hasAuthor = book.author != null && book.author!.isNotEmpty;
 
     final durationsAsync = ref.watch(bookDurationsProvider);
     final totalSeconds = durationsAsync.valueOrNull?[book.id] ?? 0;
@@ -809,7 +1007,7 @@ class _BookCard extends ConsumerWidget {
         padding: const EdgeInsets.only(right: 16),
         margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: Colors.redAccent,
+          color: context.colors.danger,
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white),
@@ -834,9 +1032,9 @@ class _BookCard extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
+                child: Text(
                   'Entfernen',
-                  style: TextStyle(color: Colors.redAccent),
+                  style: TextStyle(color: context.colors.danger),
                 ),
               ),
             ],
@@ -858,11 +1056,21 @@ class _BookCard extends ConsumerWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () async {
+            if (_inSelectionMode(ref)) {
+              _toggleSelection(ref);
+              return;
+            }
             final freshBook = await BookDao().getBookById(book.id!);
             if (freshBook == null || !context.mounted) return;
             context.push('/reader/${freshBook.id}', extra: freshBook);
           },
-          onLongPress: () => _showBookMenu(context, book, ref),
+          onLongPress: () {
+            if (_inSelectionMode(ref)) {
+              _showBookMenu(context, book, ref);
+            } else {
+              _toggleSelection(ref);
+            }
+          },
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -876,16 +1084,37 @@ class _BookCard extends ConsumerWidget {
                       size: 28,
                     ),
                     const SizedBox(width: 12),
+                    if (_isSelected(ref))
+                    const Padding(
+                      padding: EdgeInsets.only(right: 8),
+                      child: Icon(Icons.check_circle,
+                          color: Colors.white70, size: 20),
+                    ),
                     Expanded(
-                      child: Text(
-                        book.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            book.title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (hasAuthor)
+                            Text(
+                              book.author!,
+                              style: const TextStyle(
+                                color: Colors.white38,
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                        ],
                       ),
                     ),
                   ],
@@ -1295,14 +1524,14 @@ class _SessionTile extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 16),
-        color: Colors.redAccent,
+        color: context.colors.danger,
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
       confirmDismiss: (_) async {
         final confirm = await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF16213E),
+            backgroundColor: context.colors.surfaceElevated,
             title: const Text(
               'Session löschen',
               style: TextStyle(color: Colors.white),
@@ -1318,9 +1547,9 @@ class _SessionTile extends StatelessWidget {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text(
+                child: Text(
                   'Löschen',
-                  style: TextStyle(color: Colors.redAccent),
+                  style: TextStyle(color: context.colors.danger),
                 ),
               ),
             ],
@@ -1370,6 +1599,56 @@ class _SessionTile extends StatelessWidget {
   }
 }
 
+Future<void> _showSeriesDialogMultiple(
+  BuildContext context,
+  List<int> bookIds,
+  WidgetRef ref,
+) async {
+  final controller = TextEditingController();
+  await showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Theme.of(context).cardColor,
+      title: Text('Reihe für ${bookIds.length} Bücher',
+          style: const TextStyle(color: Colors.white)),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: Colors.white12,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('Abbrechen'),
+        ),
+        TextButton(
+          onPressed: () async {
+            final series = controller.text.trim().isEmpty
+                ? null
+                : controller.text.trim();
+            for (final id in bookIds) {
+              await BookDao().setSeries(id, series);
+            }
+            ref.invalidate(libraryProvider);
+            if (ctx.mounted) Navigator.pop(ctx);
+          },
+          child: Text('Speichern',
+              style: TextStyle(
+                  color: Theme.of(context).colorScheme.primary)),
+        ),
+      ],
+    ),
+  );
+}
+
 Future<void> _showSeriesDialogStatic(
   BuildContext context,
   Book book,
@@ -1389,8 +1668,6 @@ Future<void> _showSeriesDialogStatic(
         autofocus: true,
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
-          hintText: 'z.B. Harry Potter',
-          hintStyle: const TextStyle(color: Colors.white38),
           filled: true,
           fillColor: Colors.white12,
           border: OutlineInputBorder(

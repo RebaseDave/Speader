@@ -35,6 +35,7 @@ class TokenCacheDao {
       isParagraphEnd: (m['is_paragraph_end'] as int) == 1,
       isChapterTitle: (m['is_chapter_title'] as int) == 1,
       chapterIndex: m['chapter_index'] as int,
+      isItalic: (m['is_italic'] as int? ?? 0) == 1,
     )).toList();
   }
 
@@ -58,6 +59,7 @@ class TokenCacheDao {
           'is_paragraph_end': token.isParagraphEnd ? 1 : 0,
           'is_chapter_title': token.isChapterTitle ? 1 : 0,
           'chapter_index': token.chapterIndex,
+          'is_italic': token.isItalic ? 1 : 0,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
